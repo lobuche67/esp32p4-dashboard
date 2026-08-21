@@ -1,0 +1,487 @@
+external_components:
+  - source:
+      type: local
+      path: /Users/Ronny.O/espframe-build/espframe-main/components
+    components: [remote_image]
+
+esphome:
+  on_boot:
+    - priority: -350
+      then:
+        - delay: 15s
+        - http_request.get:
+            url: "http://192.168.1.4:8123/api/states/media_player.lifeboat_jukebox_upnp_av"
+            request_headers:
+              Authorization: "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJjZGE1MDY1MDNhMjE0ZDU2OGM0NWUyOTFiZTdiNDY1MCIsImlhdCI6MTc4NzE1MzA5MSwiZXhwIjoyMTAyNTEzMDkxfQ.xPpAA16OiNYACz_M4sN4MLde7AMVsvdj6pH6DIQ1oJA"
+            capture_response: true
+            on_response:
+              then:
+                - lambda: |-
+                    if (response->status_code != 200) return;
+                    auto s = body.find("\"entity_picture\":\"");
+                    if (s == std::string::npos) return;
+                    s += 17;
+                    auto e = body.find("\"", s);
+                    if (e == std::string::npos || e <= s + 5) return;
+                    std::string pic = body.substr(s, e-s);
+                    std::string url = "http://192.168.1.4:8123" + pic;
+                    ESP_LOGI("music", "Boot entity_picture: %s", url.c_str());
+                    id(album_art_img).set_url(url);
+                    id(album_art_img).update();
+
+
+globals:
+  - id: art_needs_refresh
+    type: bool
+    initial_value: 'false'
+  - id: music_pos_base
+    type: float
+    initial_value: '0'
+  - id: music_pos_base_ms
+    type: uint32_t
+    initial_value: '0'
+
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          float dur = id(music_duration).state;
+          if (dur <= 0) return;
+          // Only advance if playing
+          bool playing = std::string(id(music_state).state.c_str()) == "playing";
+          float pos = id(music_pos_base);
+          if (playing) pos += (millis() - id(music_pos_base_ms)) / 1000.0f;
+          if (pos > dur) pos = dur;
+          int pct = (int)((pos / dur) * 100.0f);
+          lv_bar_set_value(id(bar_progress), pct, LV_ANIM_OFF);
+          // Format position
+          int ps = (int)pos;
+          static char buf1[8];
+          snprintf(buf1, sizeof(buf1), "%d:%02d", ps/60, ps%60);
+          lv_label_set_text(id(lbl_pos_time), buf1);
+          // Format duration
+          int ds = (int)dur;
+          static char buf2[8];
+          snprintf(buf2, sizeof(buf2), "%d:%02d", ds/60, ds%60);
+          lv_label_set_text(id(lbl_dur_time), buf2);
+
+  - interval: 500ms
+    then:
+      - if:
+          condition:
+            lambda: return id(art_needs_refresh);
+          then:
+            - lambda: |-
+                id(art_needs_refresh) = false;
+                lv_image_set_src(album_art_widget, album_art_img);
+                lv_obj_invalidate(album_art_widget);
+
+remote_image:
+  - id: album_art_img
+    url: "http://192.168.1.4:8123/local/placeholder.jpg"
+    format: JPEG
+    type: RGB565
+    byte_order: little_endian
+    formats: [JPEG]
+    buffer_size: 200000
+    http_request_id: http_request_component
+    resize: [280, 280]
+    on_download_finished:
+      - logger.log: "Album art downloaded"
+      - lambda: id(art_needs_refresh) = true;
+    on_error:
+      - logger.log: "Album art download failed"
+
+# =============================================================================
+# PAGE 1 — Music (Navidrome via Home Assistant media_player)
+# Layout:
+#   Left:  album art placeholder + volume arc
+#   Right: song title, artist, playback controls (prev / play-pause / next)
+# Change entity_id to match your HA Navidrome media_player entity.
+# =============================================================================
+
+text_sensor:
+
+  - platform: homeassistant
+    id: music_title
+    entity_id: media_player.lifeboat_jukebox_upnp_av
+    attribute: media_title
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_song_title
+            text: !lambda return x.c_str();
+
+  - platform: homeassistant
+    id: music_artist
+    entity_id: media_player.lifeboat_jukebox_upnp_av
+    attribute: media_artist
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_song_artist
+            text: !lambda return x.c_str();
+
+  - platform: homeassistant
+    id: music_album
+    entity_id: media_player.lifeboat_jukebox_upnp_av
+    attribute: media_album_name
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_song_album
+            text: !lambda return x.c_str();
+
+  - platform: homeassistant
+    id: music_state
+    entity_id: media_player.lifeboat_jukebox_upnp_av
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_play_pause
+            text: !lambda |-
+              if (x == "playing") return "II";
+              return ">";
+        # Wake screen and jump to music page only when playback starts
+        # and the screen is currently off (LVGL paused)
+        - if:
+            condition:
+              and:
+                - lambda: return x == "playing";
+                - lvgl.is_paused:
+            then:
+              - light.turn_on:
+                  id: backlight
+                  brightness: 100%
+              - script.execute:
+                  id: nav_go
+                  idx: 1
+
+  - platform: homeassistant
+    id: music_picture
+    entity_id: media_player.lifeboat_jukebox_upnp_av
+    attribute: entity_picture
+    on_value:
+      then:
+        - if:
+            condition:
+              lambda: return x.length() > 5;
+            then:
+              - remote_image.set_url:
+                  id: album_art_img
+                  url: !lambda return std::string("http://192.168.1.4:8123") + x.c_str();
+                  update: true
+
+
+sensor:
+
+  - platform: homeassistant
+    id: music_volume
+    entity_id: media_player.lifeboat_jukebox_upnp_av
+    attribute: volume_level
+    on_value:
+      then:
+        - lvgl.bar.update:
+            id: bar_volume
+            value: !lambda return (int)(x * 100);
+        - lvgl.label.update:
+            id: lbl_volume_pct
+            text:
+              format: "%.0f%%"
+              args: [x * 100]
+
+  - platform: homeassistant
+    id: music_position
+    entity_id: media_player.lifeboat_jukebox_upnp_av
+    attribute: media_position
+    on_value:
+      then:
+        - lambda: |-
+            id(music_pos_base) = x;
+            id(music_pos_base_ms) = millis();
+
+  - platform: homeassistant
+    id: music_duration
+    entity_id: media_player.lifeboat_jukebox_upnp_av
+    attribute: media_duration
+
+
+lvgl:
+  pages:
+    - id: page_music
+      bg_color: 0x0D0D0D
+      bg_opa: COVER
+      scrollable: false
+      gesture_bubble: true
+      widgets:
+
+
+
+        # ── LEFT card: album art + volume arc ─────────────────────────────
+        - obj:
+            align: TOP_LEFT
+            x: 32
+            y: 76
+            width: 400
+            height: 458
+            radius: 20
+            bg_color: 0x1E2030
+            border_opa: TRANSP
+            shadow_opa: TRANSP
+            pad_all: 0
+            clickable: false
+            widgets:
+
+              - obj:
+                  id: album_art_box
+                  align: TOP_MID
+                  y: 20
+                  width: 280
+                  height: 280
+                  radius: 12
+                  bg_color: 0x2A2D45
+                  border_opa: TRANSP
+                  shadow_opa: TRANSP
+                  clickable: false
+                  widgets:
+                    - image:
+                        align: CENTER
+                        src: album_art_img
+                        id: album_art_widget
+
+              # Volume row: − bar + label
+              - obj:
+                  align: BOTTOM_MID
+                  y: -12
+                  width: 370
+                  height: 52
+                  bg_opa: TRANSP
+                  border_opa: TRANSP
+                  shadow_opa: TRANSP
+                  pad_all: 0
+                  clickable: false
+                  widgets:
+                    # Volume − button
+                    - obj:
+                        align: LEFT_MID
+                        x: 0
+                        width: 52
+                        height: 52
+                        radius: 12
+                        bg_color: 0x2A2D45
+                        border_opa: TRANSP
+                        shadow_opa: TRANSP
+                        clickable: true
+                        on_click:
+                          - homeassistant.action:
+                              action: media_player.volume_down
+                              data:
+                                entity_id: "media_player.lifeboat_jukebox_upnp_av"
+                        widgets:
+                          - label:
+                              align: CENTER
+                              text: "−"
+                              text_font: MONTSERRAT_28
+                              text_color: 0x9BA2BC
+                    # Volume bar
+                    - bar:
+                        id: bar_volume
+                        align: CENTER
+                        width: 240
+                        height: 14
+                        min_value: 0
+                        max_value: 100
+                        value: 50
+                        bg_color: 0x3A4060
+                        indicator:
+                          bg_color: 0x4C9FFF
+                    # Volume % label
+                    - label:
+                        id: lbl_volume_pct
+                        align: CENTER
+                        y: -20
+                        text: "50%"
+                        text_font: MONTSERRAT_16
+                        text_color: 0x9BA2BC
+                    # Volume + button
+                    - obj:
+                        align: RIGHT_MID
+                        x: 0
+                        width: 52
+                        height: 52
+                        radius: 12
+                        bg_color: 0x2A2D45
+                        border_opa: TRANSP
+                        shadow_opa: TRANSP
+                        clickable: true
+                        on_click:
+                          - homeassistant.action:
+                              action: media_player.volume_up
+                              data:
+                                entity_id: "media_player.lifeboat_jukebox_upnp_av"
+                        widgets:
+                          - label:
+                              align: CENTER
+                              text: "+"
+                              text_font: MONTSERRAT_28
+                              text_color: 0x9BA2BC
+
+        # ── RIGHT card: song info + controls ──────────────────────────────
+        - obj:
+            align: TOP_RIGHT
+            x: -32
+            y: 76
+            width: 540
+            height: 458
+            radius: 20
+            bg_color: 0x1E2030
+            border_opa: TRANSP
+            shadow_opa: TRANSP
+            pad_all: 32
+            clickable: false
+            widgets:
+
+              - label:
+                  id: lbl_song_title
+                  align: TOP_MID
+                  y: 20
+                  width: 460
+                  text: "No track playing"
+                  text_font: MONTSERRAT_28
+                  text_color: 0xFFFFFF
+                  long_mode: SCROLL_CIRCULAR
+
+              - label:
+                  id: lbl_song_artist
+                  align: TOP_MID
+                  y: 80
+                  width: 460
+                  text: "Artist"
+                  text_font: MONTSERRAT_22
+                  text_color: 0x9BA2BC
+                  long_mode: SCROLL_CIRCULAR
+
+              - label:
+                  id: lbl_song_album
+                  align: TOP_MID
+                  y: 120
+                  width: 460
+                  text: "Album"
+                  text_font: MONTSERRAT_18
+                  text_color: 0x606880
+                  long_mode: SCROLL_CIRCULAR
+
+              - obj:
+                  align: TOP_MID
+                  y: 168
+                  width: 460
+                  height: 2
+                  bg_color: 0x3A4060
+                  border_opa: TRANSP
+                  shadow_opa: TRANSP
+                  pad_all: 0
+
+              # Progress bar
+              - bar:
+                  id: bar_progress
+                  align: TOP_MID
+                  y: 188
+                  width: 420
+                  height: 6
+                  min_value: 0
+                  max_value: 100
+                  value: 0
+                  bg_color: 0x3A4060
+                  indicator:
+                    bg_color: 0x4C9FFF
+
+              # Time labels
+              - label:
+                  id: lbl_pos_time
+                  align: TOP_LEFT
+                  x: 20
+                  y: 200
+                  text: "0:00"
+                  text_font: MONTSERRAT_14
+                  text_color: 0x606880
+
+              - label:
+                  id: lbl_dur_time
+                  align: TOP_RIGHT
+                  x: -20
+                  y: 200
+                  text: "0:00"
+                  text_font: MONTSERRAT_14
+                  text_color: 0x606880
+
+              # Previous
+              - button:
+                  id: btn_prev
+                  align: BOTTOM_LEFT
+                  x: 20
+                  y: -40
+                  width: 110
+                  height: 80
+                  radius: 40
+                  bg_color: 0x2A2D45
+                  border_opa: TRANSP
+                  shadow_opa: TRANSP
+                  on_click:
+                    - homeassistant.action:
+                        action: media_player.media_previous_track
+                        data:
+                          entity_id: "media_player.lifeboat_jukebox_upnp_av"
+                  widgets:
+                    - label:
+                        align: CENTER
+                        text: "|<"
+                        text_font: MONTSERRAT_22
+                        text_color: 0xE0E0E0
+
+              # Play / Pause
+              - button:
+                  id: btn_play_pause
+                  align: BOTTOM_MID
+                  y: -30
+                  width: 130
+                  height: 90
+                  radius: 45
+                  bg_color: 0x4C9FFF
+                  border_opa: TRANSP
+                  shadow_opa: TRANSP
+                  on_click:
+                    - homeassistant.action:
+                        action: media_player.media_play_pause
+                        data:
+                          entity_id: "media_player.lifeboat_jukebox_upnp_av"
+                  widgets:
+                    - label:
+                        id: lbl_play_pause
+                        align: CENTER
+                        text: ">"
+                        text_font: MONTSERRAT_28
+                        text_color: 0xFFFFFF
+
+              # Next
+              - button:
+                  id: btn_next
+                  align: BOTTOM_RIGHT
+                  x: -20
+                  y: -40
+                  width: 110
+                  height: 80
+                  radius: 40
+                  bg_color: 0x2A2D45
+                  border_opa: TRANSP
+                  shadow_opa: TRANSP
+                  on_click:
+                    - homeassistant.action:
+                        action: media_player.media_next_track
+                        data:
+                          entity_id: "media_player.lifeboat_jukebox_upnp_av"
+                  widgets:
+                    - label:
+                        align: CENTER
+                        text: ">|"
+                        text_font: MONTSERRAT_22
+                        text_color: 0xE0E0E0

@@ -1,0 +1,591 @@
+
+substitutions:
+  immich_url: !secret immich_url
+  immich_api_key: !secret immich_api_key
+  immich_album_uuid: !secret immich_album_uuid
+
+font:
+  - file: materialdesignicons.ttf
+    id: mdi_weather
+    size: 22
+    glyphs: "󰖐󰖑󰖒󰖓󰖔󰖕󰖖󰖗󰖘󰖙󰖝󰖞󰙾󰙿󰼰"
+  - file: materialdesignicons.ttf
+    id: mdi_weather_large
+    size: 48
+    glyphs: "󰖐󰖑󰖒󰖓󰖔󰖕󰖖󰖗󰖘󰖙󰖝󰖞󰙾󰙿󰼰"
+
+# =============================================================================
+# ESP32-P4 Swipeable Dashboard  —  main config
+# Compile this file:  esphome run dashboard.yaml
+# =============================================================================
+# Pages (included below as packages):
+#   0 = Weather     pages/weather.yaml
+#   1 = Music       pages/music.yaml
+#   2 = Home        pages/home_ctrl.yaml
+#   3 = Photo       pages/photo.yaml
+# =============================================================================
+
+packages:
+  weather:   !include pages/weather.yaml
+  music:     !include pages/music.yaml
+  home_ctrl: !include pages/home_ctrl.yaml
+  photo:     !include pages/photo.yaml
+
+# =============================================================================
+# Identity
+# =============================================================================
+esphome:
+  name: esp32p4-dashboard
+  friendly_name: ESP32-P4 Dashboard
+  on_boot:
+    - priority: -200
+      then:
+        - delay: 500ms
+        - light.turn_on:
+            id: backlight
+            brightness: 100%
+        - lvgl.resume:
+        - lvgl.widget.redraw:
+        - script.execute: clock_tick
+        - script.execute: nav_dots_refresh
+
+# =============================================================================
+# ESP32-P4 board (confirmed working settings)
+# =============================================================================
+esp32:
+  board: esp32-p4-evboard
+  variant: ESP32P4
+  flash_size: 16MB
+  cpu_frequency: 360MHz
+  engineering_sample: true
+  framework:
+    type: esp-idf
+    advanced:
+      enable_idf_experimental_features: yes
+      # execute_from_psram: true  ← DO NOT enable — causes boot crash
+
+psram:
+  mode: hex
+  speed: 200MHz
+
+# =============================================================================
+# Logging
+# =============================================================================
+logger:
+  level: DEBUG
+  hardware_uart: USB_SERIAL_JTAG
+
+# =============================================================================
+# Web server (browser access at http://esp32p4-dashboard.local)
+# =============================================================================
+web_server:
+  port: 80
+  version: 3
+
+captive_portal:
+
+# =============================================================================
+# OTA / API
+# =============================================================================
+api:
+  reboot_timeout: 0s
+  encryption:
+    key: !secret api_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+# =============================================================================
+# WiFi  (ESP32-C6 coprocessor via SDIO)
+# =============================================================================
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "Dashboard-AP"
+    password: "12345678"
+
+esp32_hosted:
+  variant: ESP32C6
+  reset_pin: GPIO54
+  cmd_pin: GPIO19
+  clk_pin: GPIO18
+  d0_pin: GPIO14
+  d1_pin: GPIO15
+  d2_pin: GPIO16
+  d3_pin: GPIO17
+  active_high: true
+
+esp_ldo:
+  - channel: 3
+    voltage: 2.5V
+    adjustable: true
+
+# =============================================================================
+# Display
+# =============================================================================
+display:
+  - platform: mipi_dsi
+    model: JC1060P470
+    id: main_display
+    reset_pin:
+      number: GPIO05
+    hsync_pulse_width: 20
+    color_order: RGB
+    update_interval: never
+    auto_clear_enabled: false
+
+# =============================================================================
+# Touch
+# =============================================================================
+i2c:
+  sda: GPIO7
+  scl: GPIO8
+  scan: true
+  frequency: 400kHz
+
+touchscreen:
+  platform: gt911
+  id: main_touch
+  reset_pin: GPIO22
+  interrupt_pin: GPIO21
+  address: 0x5D
+  transform:
+    swap_xy: false
+    mirror_x: false
+    mirror_y: false
+  on_touch:
+    - lambda: |-
+        // Record starting position on initial touch
+        id(swipe_start_x) = touch.x;
+        id(swipe_end_x) = touch.x;
+  on_update:
+    - lambda: |-
+        // Track finger movement (fires continuously during drag)
+        for (auto t : touches) {
+          if (t.state <= 2) {
+            id(swipe_end_x) = t.x;
+          }
+        }
+  on_release:
+    - if:
+        condition: lvgl.is_paused
+        then:
+          - light.turn_on: backlight
+          - lvgl.resume:
+          - lvgl.widget.redraw:
+    - if:
+        condition:
+          lambda: |-
+            int dx = id(swipe_end_x) - id(swipe_start_x);
+            return dx < -80 && id(current_page) < 3;
+        then:
+          - lambda: id(current_page)++;
+          - lvgl.page.next:
+              animation: OUT_RIGHT
+              time: 300ms
+          - script.execute: nav_dots_refresh
+    - if:
+        condition:
+          lambda: |-
+            int dx = id(swipe_end_x) - id(swipe_start_x);
+            return dx > 80 && id(current_page) > 0;
+        then:
+          - lambda: id(current_page)--;
+          - lvgl.page.previous:
+              animation: OUT_LEFT
+              time: 300ms
+          - script.execute: nav_dots_refresh
+    - lambda: |-
+        id(swipe_start_x) = 0;
+        id(swipe_end_x) = 0;
+
+# =============================================================================
+# Backlight
+# =============================================================================
+output:
+  - platform: ledc
+    id: backlight_pwm
+    pin: GPIO23
+    frequency: 100Hz
+    min_power: 0.0
+    max_power: 0.8
+
+light:
+  - platform: monochromatic
+    id: backlight
+    name: Backlight
+    output: backlight_pwm
+    restore_mode: ALWAYS_ON
+    default_transition_length: 0s
+    gamma_correct: 1.0
+    on_turn_on:
+      - if:
+          condition: lvgl.is_paused
+          then:
+            - lvgl.resume:
+            - lvgl.widget.redraw:
+    on_turn_off:
+      - lvgl.pause:
+
+# =============================================================================
+# HTTP (for Navidrome album art fetch)
+# =============================================================================
+http_request:
+  id: http_request_component
+  verify_ssl: false
+  buffer_size_rx: 65535
+  buffer_size_tx: 512
+
+# =============================================================================
+# Time (SNTP)
+# =============================================================================
+time:
+  - platform: sntp
+    id: sntp_time
+    timezone: Asia/Bangkok
+    servers:
+      - 0.pool.ntp.org
+      - 1.pool.ntp.org
+    on_time_sync:
+      - script.execute: clock_tick
+    on_time:
+      - seconds: 0
+        minutes: '*'
+        then:
+          - script.execute: clock_tick
+
+# =============================================================================
+# Globals
+# =============================================================================
+globals:
+  - id: weather_icon_str
+    type: std::string
+    restore_value: false
+    initial_value: '""'
+  - id: current_page
+    type: int
+    restore_value: false
+    initial_value: '0'
+  - id: swipe_start_x
+    type: int
+    restore_value: false
+    initial_value: '0'
+  - id: swipe_end_x
+    type: int
+    restore_value: false
+    initial_value: '0'
+
+# =============================================================================
+# Entities exposed to Home Assistant
+# =============================================================================
+
+# Read-only sensor: current active page name
+text_sensor:
+  - platform: template
+    id: ha_current_page
+    name: "Dashboard Page"
+    icon: "mdi:tablet-dashboard"
+    lambda: |-
+      static const char* names[] = {"Weather","Music","Home","Photo"};
+      int p = id(current_page);
+      if (p < 0 || p > 3) return {"Unknown"};
+      return {names[p]};
+    update_interval: 1s
+
+# Button: fetch next Immich photo remotely
+button:
+  - platform: template
+    name: "Dashboard Next Photo"
+    icon: "mdi:image-sync"
+    on_press:
+      - script.execute: fetch_immich_photo
+
+# Select: navigate to a specific page from HA
+select:
+  - platform: template
+    name: "Dashboard Navigate"
+    icon: "mdi:book-open-page-variant"
+    id: ha_page_select
+    options:
+      - "Weather"
+      - "Music"
+      - "Home"
+      - "Photo"
+    initial_option: "Weather"
+    optimistic: true
+    on_value:
+      - script.execute:
+          id: nav_go
+          idx: !lambda |-
+            if (x == "Weather") return 0;
+            if (x == "Music")   return 1;
+            if (x == "Home")    return 2;
+            return 3;
+
+# =============================================================================
+# WiFi signal (status bar)
+# =============================================================================
+
+
+# =============================================================================
+# Scripts
+# =============================================================================
+script:
+
+  # -- Update clock label on every page that has lbl_clock_* --
+  - id: clock_tick
+    then:
+      - lvgl.label.update:
+          id: status_clock
+          text: !lambda |-
+            auto t = id(sntp_time).now();
+            if (!t.is_valid()) return "--:--";
+            static char buf[6];
+            snprintf(buf, sizeof(buf), "%02d:%02d", t.hour, t.minute);
+            return buf;
+
+  # -- Refresh the 4 nav dots to reflect current_page --
+  - id: nav_dots_refresh
+    then:
+      - lvgl.widget.update:
+          id: dot0
+          bg_color: 0x444444
+      - lvgl.widget.update:
+          id: dot1
+          bg_color: 0x444444
+      - lvgl.widget.update:
+          id: dot2
+          bg_color: 0x444444
+      - lvgl.widget.update:
+          id: dot3
+          bg_color: 0x444444
+      - if:
+          condition:
+            lambda: return id(current_page) == 0;
+          then:
+            - lvgl.widget.update:
+                id: dot0
+                bg_color: 0xFFFFFF
+      - if:
+          condition:
+            lambda: return id(current_page) == 1;
+          then:
+            - lvgl.widget.update:
+                id: dot1
+                bg_color: 0xFFFFFF
+      - if:
+          condition:
+            lambda: return id(current_page) == 2;
+          then:
+            - lvgl.widget.update:
+                id: dot2
+                bg_color: 0xFFFFFF
+      - if:
+          condition:
+            lambda: return id(current_page) == 3;
+          then:
+            - lvgl.widget.update:
+                id: dot3
+                bg_color: 0xFFFFFF
+
+  # -- Go to page by index --
+  - id: nav_go
+    parameters:
+      idx: int
+    then:
+      - lambda: |-
+          id(current_page) = idx;
+      - if:
+          condition:
+            lambda: return id(current_page) == 0;
+          then:
+            - lvgl.page.show: page_weather
+            - lvgl.label.update:
+                id: status_page_name
+                text: "Weather"
+      - if:
+          condition:
+            lambda: return id(current_page) == 1;
+          then:
+            - lvgl.page.show: page_music
+            - lvgl.label.update:
+                id: status_page_name
+                text: "Music"
+      - if:
+          condition:
+            lambda: return id(current_page) == 2;
+          then:
+            - lvgl.page.show: page_home
+            - lvgl.label.update:
+                id: status_page_name
+                text: "Home"
+      - if:
+          condition:
+            lambda: return id(current_page) == 3;
+          then:
+            - lvgl.page.show: page_photo
+            - lvgl.label.update:
+                id: status_page_name
+                text: "Photo"
+      - script.execute: nav_dots_refresh
+
+# =============================================================================
+# LVGL — shared top layer: status bar + nav dots + swipe handler
+# The individual pages are defined in pages/*.yaml
+# =============================================================================
+lvgl:
+  displays:
+    - main_display
+  touchscreens:
+    - touchscreen_id: main_touch
+      long_press_time: 400ms
+      long_press_repeat_time: 100ms
+  byte_order: little_endian
+  bg_color: 0x0D0D0D
+  page_wrap: false
+
+  on_idle:
+    timeout: 5min
+    then:
+      - if:
+          condition:
+            lambda: return id(music_state).state != "playing";
+          then:
+            - light.turn_off: backlight
+
+  # Swipe navigation (confirmed working pattern)
+  on_swipe_left:
+    - lambda: "lv_indev_wait_release(lv_indev_get_act());"
+    - if:
+        condition:
+          lambda: return id(current_page) < 3;
+        then:
+          - lambda: id(current_page)++;
+          - lvgl.page.next:
+              animation: OUT_RIGHT
+              time: 300ms
+          - script.execute: nav_dots_refresh
+          - lvgl.label.update:
+              id: status_page_name
+              text: !lambda |-
+                static const char* names[] = {"Weather","Music","Home","Photo"};
+                return names[id(current_page)];
+
+  on_swipe_right:
+    - lambda: "lv_indev_wait_release(lv_indev_get_act());"
+    - if:
+        condition:
+          lambda: return id(current_page) > 0;
+        then:
+          - lambda: id(current_page)--;
+          - lvgl.page.previous:
+              animation: OUT_LEFT
+              time: 300ms
+          - script.execute: nav_dots_refresh
+          - lvgl.label.update:
+              id: status_page_name
+              text: !lambda |-
+                static const char* names[] = {"Weather","Music","Home","Photo"};
+                return names[id(current_page)];
+
+  # Shared top layer: status bar + nav dots (drawn over every page)
+  top_layer:
+    widgets:
+
+      # ── Status bar (top strip) ─────────────────────────────────────────
+      - obj:
+          id: status_bar
+          align: TOP_MID
+          y: 0
+          width: 1024
+          height: 36
+          pad_all: 0
+          bg_color: 0x1A1A2E
+          bg_opa: 78%
+          border_opa: TRANSP
+          shadow_opa: TRANSP
+          radius: 0
+          clickable: false
+          widgets:
+            - label:
+                id: status_page_name
+                align: LEFT_MID
+                x: 20
+                text: "Weather"
+                text_color: 0xE0E0E0
+                text_font: MONTSERRAT_16
+            # dot 0
+            - obj:
+                id: dot0
+                align: CENTER
+                x: -24
+                width: 10
+                height: 10
+                radius: 5
+                bg_color: 0xFFFFFF
+                border_opa: TRANSP
+                shadow_opa: TRANSP
+                clickable: true
+                on_click:
+                  - script.execute:
+                      id: nav_go
+                      idx: 0
+            # dot 1
+            - obj:
+                id: dot1
+                align: CENTER
+                x: -8
+                width: 10
+                height: 10
+                radius: 5
+                bg_color: 0x555555
+                border_opa: TRANSP
+                shadow_opa: TRANSP
+                clickable: true
+                on_click:
+                  - script.execute:
+                      id: nav_go
+                      idx: 1
+            # dot 2
+            - obj:
+                id: dot2
+                align: CENTER
+                x: 8
+                width: 10
+                height: 10
+                radius: 5
+                bg_color: 0x555555
+                border_opa: TRANSP
+                shadow_opa: TRANSP
+                clickable: true
+                on_click:
+                  - script.execute:
+                      id: nav_go
+                      idx: 2
+            # dot 3
+            - obj:
+                id: dot3
+                align: CENTER
+                x: 24
+                width: 10
+                height: 10
+                radius: 5
+                bg_color: 0x555555
+                border_opa: TRANSP
+                shadow_opa: TRANSP
+                clickable: true
+                on_click:
+                  - script.execute:
+                      id: nav_go
+                      idx: 3
+            - label:
+                id: status_clock
+                align: RIGHT_MID
+                x: -20
+                text: "--:--"
+                text_color: 0xE0E0E0
+                text_font: MONTSERRAT_16
+
+

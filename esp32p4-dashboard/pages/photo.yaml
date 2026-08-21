@@ -1,0 +1,195 @@
+# PAGE 3 - Photo (Immich random photo slideshow)
+# Fetches a random photo from Immich every 30s (or on tap).
+# Set immich_url, immich_api_key in secrets.yaml before building.
+# Set immich_album_uuid to a valid album UUID to filter photos to that album,
+# or leave as "" to pick from all photos.
+
+external_components:
+  - source:
+      type: local
+      path: /Users/Ronny.O/espframe-build/espframe-main/components
+    components: [remote_image]
+
+globals:
+  - id: immich_asset_id
+    type: std::string
+    restore_value: false
+    initial_value: '""'
+  - id: immich_photo_date
+    type: std::string
+    restore_value: false
+    initial_value: '""'
+  - id: photo_needs_refresh
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+
+remote_image:
+  - id: immich_photo_img
+    url: "http://placeholder/photo.jpg"
+    format: JPEG
+    type: RGB565
+    byte_order: little_endian
+    formats: [JPEG]
+    buffer_size: 400000
+    http_request_id: http_request_component
+    resize: [960, 508]
+    request_headers:
+      x-api-key: "${immich_api_key}"
+    on_download_finished:
+      - logger.log: "Immich photo downloaded"
+      - lambda: id(photo_needs_refresh) = true;
+    on_error:
+      - logger.log: "Immich photo download failed"
+
+interval:
+  - interval: 500ms
+    then:
+      - if:
+          condition:
+            lambda: return id(photo_needs_refresh);
+          then:
+            - lambda: |-
+                id(photo_needs_refresh) = false;
+                lv_image_set_src(immich_photo_widget, immich_photo_img);
+                lv_obj_invalidate(immich_photo_widget);
+                if (!id(immich_photo_date).empty()) {
+                  lv_label_set_text(id(lbl_photo_date), id(immich_photo_date).c_str());
+                }
+
+script:
+  - id: fetch_immich_photo
+    then:
+      - logger.log: "Fetching Immich photo..."
+      - lvgl.label.update:
+          id: lbl_photo_status
+          text: "Loading..."
+      # /api/search/random supports albumId filter — same endpoint for both modes.
+      # Album mode:  set immich_album_uuid in secrets.yaml to a valid UUID.
+      # Random mode: leave immich_album_uuid as "" to pick from all photos.
+      - http_request.post:
+          url: "${immich_url}/api/search/random"
+          request_headers:
+            x-api-key: "${immich_api_key}"
+            Content-Type: "application/json"
+          body: >-
+            {"size":1,"type":"IMAGE","albumIds":["${immich_album_uuid}"]}
+          capture_response: true
+          on_response:
+            then:
+              - lambda: |-
+                  if (response->status_code != 200) {
+                    ESP_LOGW("photo", "Immich API returned %d", response->status_code);
+                    lv_label_set_text(id(lbl_photo_status), "API error");
+                    return;
+                  }
+                  // Parse id from JSON array: [{"id":"...","localDateTime":"..."}]
+                  auto id_pos = body.find("\"id\":\"");
+                  if (id_pos == std::string::npos) {
+                    ESP_LOGW("photo", "No id field in response");
+                    return;
+                  }
+                  id_pos += 6;
+                  auto id_end = body.find("\"", id_pos);
+                  if (id_end == std::string::npos) return;
+                  id(immich_asset_id) = body.substr(id_pos, id_end - id_pos);
+
+                  // Parse localDateTime for date label
+                  auto dt_pos = body.find("\"localDateTime\":\"");
+                  if (dt_pos != std::string::npos) {
+                    dt_pos += 17;
+                    auto dt_end = body.find("T", dt_pos);
+                    if (dt_end != std::string::npos)
+                      id(immich_photo_date) = body.substr(dt_pos, dt_end - dt_pos);
+                  }
+
+                  ESP_LOGI("photo", "Asset id: %s  date: %s",
+                    id(immich_asset_id).c_str(),
+                    id(immich_photo_date).c_str());
+
+                  // Fetch thumbnail via remote_image
+                  std::string thumb_url = std::string("${immich_url}") +
+                    "/api/assets/" + id(immich_asset_id) + "/thumbnail?size=preview";
+                  id(immich_photo_img).set_url(thumb_url);
+                  id(immich_photo_img).update();
+
+esphome:
+  on_boot:
+    - priority: -400
+      then:
+        - delay: 25s
+        - script.execute: fetch_immich_photo
+
+time:
+  on_time:
+    - seconds: 0
+      minutes: /1
+      then:
+        - script.execute: fetch_immich_photo
+
+lvgl:
+  pages:
+    - id: page_photo
+      bg_color: 0x000000
+      bg_opa: COVER
+      scrollable: false
+      gesture_bubble: true
+      widgets:
+
+        # Page title bar
+        - label:
+            align: TOP_LEFT
+            x: 48
+            y: 44
+            text: Photos
+            text_font: MONTSERRAT_20
+            text_color: 0x9BA2BC
+
+        # Full-width photo frame (tappable for next photo)
+        - obj:
+            id: photo_frame
+            align: CENTER
+            y: 4
+            width: 984
+            height: 510
+            radius: 16
+            bg_color: 0x111111
+            border_opa: TRANSP
+            shadow_opa: TRANSP
+            clickable: true
+            on_click:
+              - script.execute: fetch_immich_photo
+            widgets:
+
+              # The actual photo image
+              - image:
+                  id: immich_photo_widget
+                  align: CENTER
+                  src: immich_photo_img
+
+              # Loading / status overlay label
+              - label:
+                  id: lbl_photo_status
+                  align: CENTER
+                  y: -20
+                  text: "Tap to load photo"
+                  text_font: MONTSERRAT_22
+                  text_color: 0x4C5080
+
+              # Tap hint
+              - label:
+                  align: CENTER
+                  y: 16
+                  text: "tap for next"
+                  text_font: MONTSERRAT_16
+                  text_color: 0x2A2A50
+
+              # Date label overlay (bottom-right)
+              - label:
+                  id: lbl_photo_date
+                  align: BOTTOM_RIGHT
+                  x: -16
+                  y: -12
+                  text: ""
+                  text_font: MONTSERRAT_16
+                  text_color: 0xC0C8E0

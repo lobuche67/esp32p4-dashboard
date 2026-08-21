@@ -1,0 +1,132 @@
+# ============================================================================
+# Home Assistant — Template Sensors for ESPHome Hourly Forecast Display
+# Source: weather.googleweather (Google Weather integration)
+#
+# HOW TO USE:
+#   Copy this file's content into your Home Assistant configuration.
+#   Either:
+#     a) Paste into configuration.yaml under the `template:` key, OR
+#     b) Save as a separate file and include it:
+#          template: !include google_weather_hourly_forecast.yaml
+#
+# These sensors are consumed by the ESPHome esp32p4-dashboard weather page.
+# Each sensor state is formatted as:  "HH:MM,condition,temperature,precip_prob"
+# Example:  "14:00,sunny,31,20"
+#
+# After adding, restart Home Assistant and verify in Developer Tools → States
+# that sensor.forecast_h1 through sensor.forecast_h6 appear with valid states.
+# ============================================================================
+
+- trigger:
+    # Refresh every 5 minutes and on HA startup
+    - platform: time_pattern
+      minutes: "/5"
+    - platform: homeassistant
+      event: start
+
+  action:
+    - service: weather.get_forecasts
+      data:
+        type: hourly
+      target:
+        entity_id: weather.googleweather
+      response_variable: hourly
+
+  sensor:
+    - name: "Weather Precip Now"
+      unique_id: weather_precip_now_googleweather
+      unit_of_measurement: "%"
+      state: >-
+        {% set fc = hourly['weather.googleweather']['forecast'] %}
+        {% if fc | length >= 1 %}
+          {{ fc[0].precipitation_probability | default(0) | round(0) | int }}
+        {% else %}
+          0
+        {% endif %}
+      availability: >-
+        {{ hourly is defined and 'weather.googleweather' in hourly
+           and hourly['weather.googleweather']['forecast'] | length >= 1 }}
+
+    - name: "Forecast H1"
+      unique_id: forecast_h1_googleweather
+      state: >-
+        {% set fc = hourly['weather.googleweather']['forecast'] %}
+        {% if fc | length >= 1 %}
+          {% set f = fc[1] %}
+          {{ as_local(strptime(f.datetime, '%Y-%m-%dT%H:%M:%S%z')).strftime('%H:%M') }},{{ f.condition }},{{ f.temperature | round(0) | int }},{{ f.precipitation_probability | default(0) | round(0) | int }}
+        {% else %}
+          unavailable
+        {% endif %}
+      availability: >-
+        {{ hourly is defined and 'weather.googleweather' in hourly
+           and hourly['weather.googleweather']['forecast'] | length >= 1 }}
+
+    - name: "Forecast H2"
+      unique_id: forecast_h2_googleweather
+      state: >-
+        {% set fc = hourly['weather.googleweather']['forecast'] %}
+        {% if fc | length >= 2 %}
+          {% set f = fc[2] %}
+          {{ as_local(strptime(f.datetime, '%Y-%m-%dT%H:%M:%S%z')).strftime('%H:%M') }},{{ f.condition }},{{ f.temperature | round(0) | int }},{{ f.precipitation_probability | default(0) | round(0) | int }}
+        {% else %}
+          unavailable
+        {% endif %}
+      availability: >-
+        {{ hourly is defined and 'weather.googleweather' in hourly
+           and hourly['weather.googleweather']['forecast'] | length >= 2 }}
+
+    - name: "Forecast H3"
+      unique_id: forecast_h3_googleweather
+      state: >-
+        {% set fc = hourly['weather.googleweather']['forecast'] %}
+        {% if fc | length >= 3 %}
+          {% set f = fc[3] %}
+          {{ as_local(strptime(f.datetime, '%Y-%m-%dT%H:%M:%S%z')).strftime('%H:%M') }},{{ f.condition }},{{ f.temperature | round(0) | int }},{{ f.precipitation_probability | default(0) | round(0) | int }}
+        {% else %}
+          unavailable
+        {% endif %}
+      availability: >-
+        {{ hourly is defined and 'weather.googleweather' in hourly
+           and hourly['weather.googleweather']['forecast'] | length >= 3 }}
+
+    - name: "Forecast H4"
+      unique_id: forecast_h4_googleweather
+      state: >-
+        {% set fc = hourly['weather.googleweather']['forecast'] %}
+        {% if fc | length >= 4 %}
+          {% set f = fc[4] %}
+          {{ as_local(strptime(f.datetime, '%Y-%m-%dT%H:%M:%S%z')).strftime('%H:%M') }},{{ f.condition }},{{ f.temperature | round(0) | int }},{{ f.precipitation_probability | default(0) | round(0) | int }}
+        {% else %}
+          unavailable
+        {% endif %}
+      availability: >-
+        {{ hourly is defined and 'weather.googleweather' in hourly
+           and hourly['weather.googleweather']['forecast'] | length >= 4 }}
+
+    - name: "Forecast H5"
+      unique_id: forecast_h5_googleweather
+      state: >-
+        {% set fc = hourly['weather.googleweather']['forecast'] %}
+        {% if fc | length >= 5 %}
+          {% set f = fc[5] %}
+          {{ as_local(strptime(f.datetime, '%Y-%m-%dT%H:%M:%S%z')).strftime('%H:%M') }},{{ f.condition }},{{ f.temperature | round(0) | int }},{{ f.precipitation_probability | default(0) | round(0) | int }}
+        {% else %}
+          unavailable
+        {% endif %}
+      availability: >-
+        {{ hourly is defined and 'weather.googleweather' in hourly
+           and hourly['weather.googleweather']['forecast'] | length >= 5 }}
+
+    - name: "Forecast H6"
+      unique_id: forecast_h6_googleweather
+      state: >-
+        {% set fc = hourly['weather.googleweather']['forecast'] %}
+        {% if fc | length >= 6 %}
+          {% set f = fc[6] %}
+          {{ as_local(strptime(f.datetime, '%Y-%m-%dT%H:%M:%S%z')).strftime('%H:%M') }},{{ f.condition }},{{ f.temperature | round(0) | int }},{{ f.precipitation_probability | default(0) | round(0) | int }}
+        {% else %}
+          unavailable
+        {% endif %}
+      availability: >-
+        {{ hourly is defined and 'weather.googleweather' in hourly
+           and hourly['weather.googleweather']['forecast'] | length >= 6 }}

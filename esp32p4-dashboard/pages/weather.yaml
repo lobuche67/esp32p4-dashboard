@@ -1,0 +1,835 @@
+# PAGE 0 — Weather
+# Current conditions: weather.googleweather via platform: homeassistant
+# Hourly forecast:    sensor.forecast_h1..h6 (add ha_google_weather_hourly_forecast.yaml to HA)
+# State format:       "HH:MM,condition,temperature,precip_prob"
+
+# ── Current conditions ────────────────────────────────────────────────────────
+sensor:
+
+  - platform: homeassistant
+    id: weather_temp
+    entity_id: weather.googleweather
+    attribute: temperature
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_weather_temp
+            text:
+              format: "%.0f°"
+              args: [x]
+
+  - platform: homeassistant
+    id: weather_feels_like
+    entity_id: weather.googleweather
+    attribute: apparent_temperature
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_weather_feels
+            text:
+              format: "Feels %.0f°"
+              args: [x]
+
+  - platform: homeassistant
+    id: weather_humidity
+    entity_id: weather.googleweather
+    attribute: humidity
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_weather_hum
+            text:
+              format: "%.0f%%"
+              args: [x]
+
+  - platform: homeassistant
+    id: weather_wind
+    entity_id: weather.googleweather
+    attribute: wind_speed
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_weather_wind
+            text:
+              format: "%.0f km/h"
+              args: [x]
+
+  - platform: homeassistant
+    id: weather_precip_prob
+    entity_id: sensor.weather_precip_now
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_weather_precip
+            text:
+              format: "Rain %.0f%%"
+              args: [x]
+
+text_sensor:
+
+  - platform: homeassistant
+    id: weather_condition
+    entity_id: weather.googleweather
+    on_value:
+      then:
+        - lambda: |-
+            if(x=="sunny") id(weather_icon_str)="󰖙";
+            if(x=="clear-night") id(weather_icon_str)="󰖔";
+            if(x=="partlycloudy") id(weather_icon_str)="󰖕";
+            if(x=="cloudy") id(weather_icon_str)="󰖐";
+            if(x=="fog") id(weather_icon_str)="󰖑";
+            if(x=="rainy") id(weather_icon_str)="󰖗";
+            if(x=="pouring") id(weather_icon_str)="󰖖";
+            if(x=="lightning") id(weather_icon_str)="󰖓";
+            if(x=="lightning-rainy") id(weather_icon_str)="󰙾";
+            if(x=="snowy") id(weather_icon_str)="󰖘";
+            if(x=="snowy-rainy") id(weather_icon_str)="󰙿";
+            if(x=="windy") id(weather_icon_str)="󰖝";
+            if(x=="windy-variant") id(weather_icon_str)="󰖞";
+            if(x=="hail") id(weather_icon_str)="󰖒";
+            if(x=="exceptional") id(weather_icon_str)="󰼰";
+        - lvgl.label.update:
+            id: lbl_weather_icon
+            text: !lambda return id(weather_icon_str).c_str();
+        - lvgl.label.update:
+            id: lbl_weather_condition
+            text: !lambda return x.c_str();
+
+# ── Hourly forecast text sensors ─────────────────────────────────────────────
+# HA pushes state via native API. No http_request needed.
+
+  - platform: homeassistant
+    id: ha_forecast_h1
+    entity_id: sensor.forecast_h1
+    on_value:
+      then:
+        - lambda: |-
+            auto val = x;
+            int c1 = val.find(',');
+            if (c1 == (int)std::string::npos) return;
+            int c2 = val.find(',', c1+1);
+            if (c2 == (int)std::string::npos) return;
+            int c3 = val.find(',', c2+1);
+            if (c3 == (int)std::string::npos) c3 = (int)val.size();
+            id(fc1_time) = val.substr(0, c1);
+            {
+              std::string cond = val.substr(c1+1, c2-c1-1);
+              if(cond=="sunny") cond="󰖙";
+              if(cond=="clear-night") cond="󰖔";
+              if(cond=="partlycloudy") cond="󰖕";
+              if(cond=="cloudy") cond="󰖐";
+              if(cond=="fog") cond="󰖑";
+              if(cond=="rainy") cond="󰖗";
+              if(cond=="pouring") cond="󰖖";
+              if(cond=="lightning") cond="󰖓";
+              if(cond=="lightning-rainy") cond="󰙾";
+              if(cond=="snowy") cond="󰖘";
+              if(cond=="snowy-rainy") cond="󰙿";
+              if(cond=="windy") cond="󰖝";
+              if(cond=="windy-variant") cond="󰖞";
+              if(cond=="hail") cond="󰖒";
+              if(cond=="exceptional") cond="󰼰";
+              id(fc1_cond) = cond;
+            }
+            id(fc1_temp) = val.substr(c2+1, c3-c2-1) + "°";
+            id(fc1_prob) = c3 < (int)val.size() ? val.substr(c3+1) + "%" : "";
+        - lvgl.label.update:
+            id: lbl_fc1_day
+            text: !lambda return id(fc1_time).c_str();
+        - lvgl.label.update:
+            id: lbl_fc1_condition
+            text: !lambda return id(fc1_cond).c_str();
+        - lvgl.label.update:
+            id: lbl_fc1_hi
+            text: !lambda return id(fc1_temp).c_str();
+        - lvgl.label.update:
+            id: lbl_fc1_prob
+            text: !lambda return id(fc1_prob).c_str();
+  - platform: homeassistant
+    id: ha_forecast_h2
+    entity_id: sensor.forecast_h2
+    on_value:
+      then:
+        - lambda: |-
+            auto val = x;
+            int c1 = val.find(',');
+            if (c1 == (int)std::string::npos) return;
+            int c2 = val.find(',', c1+1);
+            if (c2 == (int)std::string::npos) return;
+            int c3 = val.find(',', c2+1);
+            if (c3 == (int)std::string::npos) c3 = (int)val.size();
+            id(fc2_time) = val.substr(0, c1);
+            {
+              std::string cond = val.substr(c1+1, c2-c1-1);
+              if(cond=="sunny") cond="󰖙";
+              if(cond=="clear-night") cond="󰖔";
+              if(cond=="partlycloudy") cond="󰖕";
+              if(cond=="cloudy") cond="󰖐";
+              if(cond=="fog") cond="󰖑";
+              if(cond=="rainy") cond="󰖗";
+              if(cond=="pouring") cond="󰖖";
+              if(cond=="lightning") cond="󰖓";
+              if(cond=="lightning-rainy") cond="󰙾";
+              if(cond=="snowy") cond="󰖘";
+              if(cond=="snowy-rainy") cond="󰙿";
+              if(cond=="windy") cond="󰖝";
+              if(cond=="windy-variant") cond="󰖞";
+              if(cond=="hail") cond="󰖒";
+              if(cond=="exceptional") cond="󰼰";
+              id(fc2_cond) = cond;
+            }
+            id(fc2_temp) = val.substr(c2+1, c3-c2-1) + "°";
+            id(fc2_prob) = c3 < (int)val.size() ? val.substr(c3+1) + "%" : "";
+        - lvgl.label.update:
+            id: lbl_fc2_day
+            text: !lambda return id(fc2_time).c_str();
+        - lvgl.label.update:
+            id: lbl_fc2_condition
+            text: !lambda return id(fc2_cond).c_str();
+        - lvgl.label.update:
+            id: lbl_fc2_hi
+            text: !lambda return id(fc2_temp).c_str();
+        - lvgl.label.update:
+            id: lbl_fc2_prob
+            text: !lambda return id(fc2_prob).c_str();
+  - platform: homeassistant
+    id: ha_forecast_h3
+    entity_id: sensor.forecast_h3
+    on_value:
+      then:
+        - lambda: |-
+            auto val = x;
+            int c1 = val.find(',');
+            if (c1 == (int)std::string::npos) return;
+            int c2 = val.find(',', c1+1);
+            if (c2 == (int)std::string::npos) return;
+            int c3 = val.find(',', c2+1);
+            if (c3 == (int)std::string::npos) c3 = (int)val.size();
+            id(fc3_time) = val.substr(0, c1);
+            {
+              std::string cond = val.substr(c1+1, c2-c1-1);
+              if(cond=="sunny") cond="󰖙";
+              if(cond=="clear-night") cond="󰖔";
+              if(cond=="partlycloudy") cond="󰖕";
+              if(cond=="cloudy") cond="󰖐";
+              if(cond=="fog") cond="󰖑";
+              if(cond=="rainy") cond="󰖗";
+              if(cond=="pouring") cond="󰖖";
+              if(cond=="lightning") cond="󰖓";
+              if(cond=="lightning-rainy") cond="󰙾";
+              if(cond=="snowy") cond="󰖘";
+              if(cond=="snowy-rainy") cond="󰙿";
+              if(cond=="windy") cond="󰖝";
+              if(cond=="windy-variant") cond="󰖞";
+              if(cond=="hail") cond="󰖒";
+              if(cond=="exceptional") cond="󰼰";
+              id(fc3_cond) = cond;
+            }
+            id(fc3_temp) = val.substr(c2+1, c3-c2-1) + "°";
+            id(fc3_prob) = c3 < (int)val.size() ? val.substr(c3+1) + "%" : "";
+        - lvgl.label.update:
+            id: lbl_fc3_day
+            text: !lambda return id(fc3_time).c_str();
+        - lvgl.label.update:
+            id: lbl_fc3_condition
+            text: !lambda return id(fc3_cond).c_str();
+        - lvgl.label.update:
+            id: lbl_fc3_hi
+            text: !lambda return id(fc3_temp).c_str();
+        - lvgl.label.update:
+            id: lbl_fc3_prob
+            text: !lambda return id(fc3_prob).c_str();
+  - platform: homeassistant
+    id: ha_forecast_h4
+    entity_id: sensor.forecast_h4
+    on_value:
+      then:
+        - lambda: |-
+            auto val = x;
+            int c1 = val.find(',');
+            if (c1 == (int)std::string::npos) return;
+            int c2 = val.find(',', c1+1);
+            if (c2 == (int)std::string::npos) return;
+            int c3 = val.find(',', c2+1);
+            if (c3 == (int)std::string::npos) c3 = (int)val.size();
+            id(fc4_time) = val.substr(0, c1);
+            {
+              std::string cond = val.substr(c1+1, c2-c1-1);
+              if(cond=="sunny") cond="󰖙";
+              if(cond=="clear-night") cond="󰖔";
+              if(cond=="partlycloudy") cond="󰖕";
+              if(cond=="cloudy") cond="󰖐";
+              if(cond=="fog") cond="󰖑";
+              if(cond=="rainy") cond="󰖗";
+              if(cond=="pouring") cond="󰖖";
+              if(cond=="lightning") cond="󰖓";
+              if(cond=="lightning-rainy") cond="󰙾";
+              if(cond=="snowy") cond="󰖘";
+              if(cond=="snowy-rainy") cond="󰙿";
+              if(cond=="windy") cond="󰖝";
+              if(cond=="windy-variant") cond="󰖞";
+              if(cond=="hail") cond="󰖒";
+              if(cond=="exceptional") cond="󰼰";
+              id(fc4_cond) = cond;
+            }
+            id(fc4_temp) = val.substr(c2+1, c3-c2-1) + "°";
+            id(fc4_prob) = c3 < (int)val.size() ? val.substr(c3+1) + "%" : "";
+        - lvgl.label.update:
+            id: lbl_fc4_day
+            text: !lambda return id(fc4_time).c_str();
+        - lvgl.label.update:
+            id: lbl_fc4_condition
+            text: !lambda return id(fc4_cond).c_str();
+        - lvgl.label.update:
+            id: lbl_fc4_hi
+            text: !lambda return id(fc4_temp).c_str();
+        - lvgl.label.update:
+            id: lbl_fc4_prob
+            text: !lambda return id(fc4_prob).c_str();
+  - platform: homeassistant
+    id: ha_forecast_h5
+    entity_id: sensor.forecast_h5
+    on_value:
+      then:
+        - lambda: |-
+            auto val = x;
+            int c1 = val.find(',');
+            if (c1 == (int)std::string::npos) return;
+            int c2 = val.find(',', c1+1);
+            if (c2 == (int)std::string::npos) return;
+            int c3 = val.find(',', c2+1);
+            if (c3 == (int)std::string::npos) c3 = (int)val.size();
+            id(fc5_time) = val.substr(0, c1);
+            {
+              std::string cond = val.substr(c1+1, c2-c1-1);
+              if(cond=="sunny") cond="󰖙";
+              if(cond=="clear-night") cond="󰖔";
+              if(cond=="partlycloudy") cond="󰖕";
+              if(cond=="cloudy") cond="󰖐";
+              if(cond=="fog") cond="󰖑";
+              if(cond=="rainy") cond="󰖗";
+              if(cond=="pouring") cond="󰖖";
+              if(cond=="lightning") cond="󰖓";
+              if(cond=="lightning-rainy") cond="󰙾";
+              if(cond=="snowy") cond="󰖘";
+              if(cond=="snowy-rainy") cond="󰙿";
+              if(cond=="windy") cond="󰖝";
+              if(cond=="windy-variant") cond="󰖞";
+              if(cond=="hail") cond="󰖒";
+              if(cond=="exceptional") cond="󰼰";
+              id(fc5_cond) = cond;
+            }
+            id(fc5_temp) = val.substr(c2+1, c3-c2-1) + "°";
+            id(fc5_prob) = c3 < (int)val.size() ? val.substr(c3+1) + "%" : "";
+        - lvgl.label.update:
+            id: lbl_fc5_day
+            text: !lambda return id(fc5_time).c_str();
+        - lvgl.label.update:
+            id: lbl_fc5_condition
+            text: !lambda return id(fc5_cond).c_str();
+        - lvgl.label.update:
+            id: lbl_fc5_hi
+            text: !lambda return id(fc5_temp).c_str();
+        - lvgl.label.update:
+            id: lbl_fc5_prob
+            text: !lambda return id(fc5_prob).c_str();
+  - platform: homeassistant
+    id: ha_forecast_h6
+    entity_id: sensor.forecast_h6
+    on_value:
+      then:
+        - lambda: |-
+            auto val = x;
+            int c1 = val.find(',');
+            if (c1 == (int)std::string::npos) return;
+            int c2 = val.find(',', c1+1);
+            if (c2 == (int)std::string::npos) return;
+            int c3 = val.find(',', c2+1);
+            if (c3 == (int)std::string::npos) c3 = (int)val.size();
+            id(fc6_time) = val.substr(0, c1);
+            {
+              std::string cond = val.substr(c1+1, c2-c1-1);
+              if(cond=="sunny") cond="󰖙";
+              if(cond=="clear-night") cond="󰖔";
+              if(cond=="partlycloudy") cond="󰖕";
+              if(cond=="cloudy") cond="󰖐";
+              if(cond=="fog") cond="󰖑";
+              if(cond=="rainy") cond="󰖗";
+              if(cond=="pouring") cond="󰖖";
+              if(cond=="lightning") cond="󰖓";
+              if(cond=="lightning-rainy") cond="󰙾";
+              if(cond=="snowy") cond="󰖘";
+              if(cond=="snowy-rainy") cond="󰙿";
+              if(cond=="windy") cond="󰖝";
+              if(cond=="windy-variant") cond="󰖞";
+              if(cond=="hail") cond="󰖒";
+              if(cond=="exceptional") cond="󰼰";
+              id(fc6_cond) = cond;
+            }
+            id(fc6_temp) = val.substr(c2+1, c3-c2-1) + "°";
+            id(fc6_prob) = c3 < (int)val.size() ? val.substr(c3+1) + "%" : "";
+        - lvgl.label.update:
+            id: lbl_fc6_day
+            text: !lambda return id(fc6_time).c_str();
+        - lvgl.label.update:
+            id: lbl_fc6_condition
+            text: !lambda return id(fc6_cond).c_str();
+        - lvgl.label.update:
+            id: lbl_fc6_hi
+            text: !lambda return id(fc6_temp).c_str();
+        - lvgl.label.update:
+            id: lbl_fc6_prob
+            text: !lambda return id(fc6_prob).c_str();
+
+globals:
+  - id: fc1_time
+    type: std::string
+    initial_value: '"+1h"'
+  - id: fc1_cond
+    type: std::string
+    initial_value: '"..."'
+  - id: fc1_temp
+    type: std::string
+    initial_value: '"--"'
+  - id: fc1_prob
+    type: std::string
+    initial_value: '""'
+  - id: fc2_time
+    type: std::string
+    initial_value: '"+2h"'
+  - id: fc2_cond
+    type: std::string
+    initial_value: '"..."'
+  - id: fc2_temp
+    type: std::string
+    initial_value: '"--"'
+  - id: fc2_prob
+    type: std::string
+    initial_value: '""'
+  - id: fc3_time
+    type: std::string
+    initial_value: '"+3h"'
+  - id: fc3_cond
+    type: std::string
+    initial_value: '"..."'
+  - id: fc3_temp
+    type: std::string
+    initial_value: '"--"'
+  - id: fc3_prob
+    type: std::string
+    initial_value: '""'
+  - id: fc4_time
+    type: std::string
+    initial_value: '"+4h"'
+  - id: fc4_cond
+    type: std::string
+    initial_value: '"..."'
+  - id: fc4_temp
+    type: std::string
+    initial_value: '"--"'
+  - id: fc4_prob
+    type: std::string
+    initial_value: '""'
+  - id: fc5_time
+    type: std::string
+    initial_value: '"+5h"'
+  - id: fc5_cond
+    type: std::string
+    initial_value: '"..."'
+  - id: fc5_temp
+    type: std::string
+    initial_value: '"--"'
+  - id: fc5_prob
+    type: std::string
+    initial_value: '""'
+  - id: fc6_time
+    type: std::string
+    initial_value: '"+6h"'
+  - id: fc6_cond
+    type: std::string
+    initial_value: '"..."'
+  - id: fc6_temp
+    type: std::string
+    initial_value: '"--"'
+  - id: fc6_prob
+    type: std::string
+    initial_value: '""'
+
+lvgl:
+  pages:
+    - id: page_weather
+      bg_color: 0x0D0D0D
+      bg_opa: COVER
+      scrollable: false
+      gesture_bubble: true
+      widgets:
+
+        # Left: current conditions
+        - obj:
+            align: TOP_LEFT
+            x: 24
+            y: 76
+            width: 460
+            height: 458
+            radius: 24
+            bg_color: 0x1E2030
+            border_opa: TRANSP
+            shadow_opa: TRANSP
+            pad_all: 32
+            clickable: false
+            widgets:
+
+              - label:
+                  id: lbl_weather_temp
+                  align: TOP_MID
+                  y: 24
+                  text: "--°"
+                  text_font: MONTSERRAT_48
+                  text_color: 0xFFFFFF
+
+              - label:
+                  id: lbl_weather_icon
+                  align: TOP_MID
+                  y: 68
+                  text: "󰖐"
+                  text_font: mdi_weather
+                  text_color: 0xC0C8E0
+
+              - label:
+                  id: lbl_weather_condition
+                  align: TOP_MID
+                  y: 100
+                  text: "Loading..."
+                  text_font: MONTSERRAT_24
+                  text_color: 0xC0C8E0
+
+              - obj:
+                  align: TOP_MID
+                  y: 158
+                  width: 380
+                  height: 2
+                  bg_color: 0x3A4060
+                  border_opa: TRANSP
+                  shadow_opa: TRANSP
+                  pad_all: 0
+
+              - label:
+                  align: TOP_LEFT
+                  x: 8
+                  y: 178
+                  text: "Humidity"
+                  text_font: MONTSERRAT_22
+                  text_color: 0x9BA2BC
+
+              - label:
+                  id: lbl_weather_hum
+                  align: TOP_RIGHT
+                  x: -8
+                  y: 178
+                  text: "--%"
+                  text_font: MONTSERRAT_22
+                  text_color: 0xC0C8E0
+
+              - label:
+                  align: TOP_LEFT
+                  x: 8
+                  y: 230
+                  text: "Feels"
+                  text_font: MONTSERRAT_22
+                  text_color: 0x9BA2BC
+
+              - label:
+                  id: lbl_weather_feels
+                  align: TOP_RIGHT
+                  x: -8
+                  y: 230
+                  text: "--°"
+                  text_font: MONTSERRAT_22
+                  text_color: 0xC0C8E0
+
+              - label:
+                  align: TOP_LEFT
+                  x: 8
+                  y: 282
+                  text: "Wind"
+                  text_font: MONTSERRAT_22
+                  text_color: 0x9BA2BC
+
+              - label:
+                  id: lbl_weather_wind
+                  align: TOP_RIGHT
+                  x: -8
+                  y: 282
+                  text: "-- km/h"
+                  text_font: MONTSERRAT_22
+                  text_color: 0xC0C8E0
+
+              - label:
+                  align: TOP_LEFT
+                  x: 8
+                  y: 334
+                  text: "Rain"
+                  text_font: MONTSERRAT_22
+                  text_color: 0x9BA2BC
+
+              - label:
+                  id: lbl_weather_precip
+                  align: TOP_RIGHT
+                  x: -8
+                  y: 334
+                  text: "--%"
+                  text_font: MONTSERRAT_22
+                  text_color: 0xC0C8E0
+
+        # Right: hourly forecast
+        - obj:
+            align: TOP_RIGHT
+            x: -24
+            y: 76
+            width: 460
+            height: 458
+            radius: 24
+            bg_color: 0x1E2030
+            border_opa: TRANSP
+            shadow_opa: TRANSP
+            pad_all: 24
+            clickable: false
+            widgets:
+
+              - label:
+                  align: TOP_MID
+                  y: 16
+                  text: "Hourly Forecast"
+                  text_font: MONTSERRAT_18
+                  text_color: 0x9BA2BC
+              - label:
+                  id: lbl_fc1_day
+                  align: TOP_LEFT
+                  x: 0
+                  y: 60
+                  text: "+1h"
+                  text_font: MONTSERRAT_18
+                  text_color: 0xC0C8E0
+              - label:
+                  id: lbl_fc1_condition
+                  text_font: mdi_weather
+                  align: TOP_MID
+                  y: 60
+                  text: "..."
+                  text_color: 0x9BA2BC
+              - label:
+                  id: lbl_fc1_hi
+                  align: TOP_RIGHT
+                  x: -50
+                  y: 60
+                  text: "--°"
+                  text_font: MONTSERRAT_18
+                  text_color: 0xFFFFFF
+              - label:
+                  id: lbl_fc1_prob
+                  align: TOP_RIGHT
+                  x: 0
+                  y: 60
+                  text: "--%"
+                  text_font: MONTSERRAT_14
+                  text_color: 0x4C9FFF
+              - obj:
+                  align: TOP_MID
+                  y: 100
+                  width: 400
+                  height: 2
+                  bg_color: 0x2A2D40
+                  border_opa: TRANSP
+                  shadow_opa: TRANSP
+                  pad_all: 0
+              - label:
+                  id: lbl_fc2_day
+                  align: TOP_LEFT
+                  x: 0
+                  y: 120
+                  text: "+2h"
+                  text_font: MONTSERRAT_18
+                  text_color: 0xC0C8E0
+              - label:
+                  id: lbl_fc2_condition
+                  text_font: mdi_weather
+                  align: TOP_MID
+                  y: 120
+                  text: "..."
+                  text_color: 0x9BA2BC
+              - label:
+                  id: lbl_fc2_hi
+                  align: TOP_RIGHT
+                  x: -50
+                  y: 120
+                  text: "--°"
+                  text_font: MONTSERRAT_18
+                  text_color: 0xFFFFFF
+              - label:
+                  id: lbl_fc2_prob
+                  align: TOP_RIGHT
+                  x: 0
+                  y: 120
+                  text: "--%"
+                  text_font: MONTSERRAT_14
+                  text_color: 0x4C9FFF
+              - obj:
+                  align: TOP_MID
+                  y: 160
+                  width: 400
+                  height: 2
+                  bg_color: 0x2A2D40
+                  border_opa: TRANSP
+                  shadow_opa: TRANSP
+                  pad_all: 0
+              - label:
+                  id: lbl_fc3_day
+                  align: TOP_LEFT
+                  x: 0
+                  y: 180
+                  text: "+3h"
+                  text_font: MONTSERRAT_18
+                  text_color: 0xC0C8E0
+              - label:
+                  id: lbl_fc3_condition
+                  text_font: mdi_weather
+                  align: TOP_MID
+                  y: 180
+                  text: "..."
+                  text_color: 0x9BA2BC
+              - label:
+                  id: lbl_fc3_hi
+                  align: TOP_RIGHT
+                  x: -50
+                  y: 180
+                  text: "--°"
+                  text_font: MONTSERRAT_18
+                  text_color: 0xFFFFFF
+              - label:
+                  id: lbl_fc3_prob
+                  align: TOP_RIGHT
+                  x: 0
+                  y: 180
+                  text: "--%"
+                  text_font: MONTSERRAT_14
+                  text_color: 0x4C9FFF
+              - obj:
+                  align: TOP_MID
+                  y: 220
+                  width: 400
+                  height: 2
+                  bg_color: 0x2A2D40
+                  border_opa: TRANSP
+                  shadow_opa: TRANSP
+                  pad_all: 0
+              - label:
+                  id: lbl_fc4_day
+                  align: TOP_LEFT
+                  x: 0
+                  y: 240
+                  text: "+4h"
+                  text_font: MONTSERRAT_18
+                  text_color: 0xC0C8E0
+              - label:
+                  id: lbl_fc4_condition
+                  text_font: mdi_weather
+                  align: TOP_MID
+                  y: 240
+                  text: "..."
+                  text_color: 0x9BA2BC
+              - label:
+                  id: lbl_fc4_hi
+                  align: TOP_RIGHT
+                  x: -50
+                  y: 240
+                  text: "--°"
+                  text_font: MONTSERRAT_18
+                  text_color: 0xFFFFFF
+              - label:
+                  id: lbl_fc4_prob
+                  align: TOP_RIGHT
+                  x: 0
+                  y: 240
+                  text: "--%"
+                  text_font: MONTSERRAT_14
+                  text_color: 0x4C9FFF
+              - obj:
+                  align: TOP_MID
+                  y: 280
+                  width: 400
+                  height: 2
+                  bg_color: 0x2A2D40
+                  border_opa: TRANSP
+                  shadow_opa: TRANSP
+                  pad_all: 0
+              - label:
+                  id: lbl_fc5_day
+                  align: TOP_LEFT
+                  x: 0
+                  y: 300
+                  text: "+5h"
+                  text_font: MONTSERRAT_18
+                  text_color: 0xC0C8E0
+              - label:
+                  id: lbl_fc5_condition
+                  text_font: mdi_weather
+                  align: TOP_MID
+                  y: 300
+                  text: "..."
+                  text_color: 0x9BA2BC
+              - label:
+                  id: lbl_fc5_hi
+                  align: TOP_RIGHT
+                  x: -50
+                  y: 300
+                  text: "--°"
+                  text_font: MONTSERRAT_18
+                  text_color: 0xFFFFFF
+              - label:
+                  id: lbl_fc5_prob
+                  align: TOP_RIGHT
+                  x: 0
+                  y: 300
+                  text: "--%"
+                  text_font: MONTSERRAT_14
+                  text_color: 0x4C9FFF
+              - obj:
+                  align: TOP_MID
+                  y: 340
+                  width: 400
+                  height: 2
+                  bg_color: 0x2A2D40
+                  border_opa: TRANSP
+                  shadow_opa: TRANSP
+                  pad_all: 0
+              - label:
+                  id: lbl_fc6_day
+                  align: TOP_LEFT
+                  x: 0
+                  y: 360
+                  text: "+6h"
+                  text_font: MONTSERRAT_18
+                  text_color: 0xC0C8E0
+              - label:
+                  id: lbl_fc6_condition
+                  text_font: mdi_weather
+                  align: TOP_MID
+                  y: 360
+                  text: "..."
+                  text_color: 0x9BA2BC
+              - label:
+                  id: lbl_fc6_hi
+                  align: TOP_RIGHT
+                  x: -50
+                  y: 360
+                  text: "--°"
+                  text_font: MONTSERRAT_18
+                  text_color: 0xFFFFFF
+              - label:
+                  id: lbl_fc6_prob
+                  align: TOP_RIGHT
+                  x: 0
+                  y: 360
+                  text: "--%"
+                  text_font: MONTSERRAT_14
+                  text_color: 0x4C9FFF
