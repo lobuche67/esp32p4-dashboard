@@ -8,20 +8,20 @@
 
 | # | Page | Features |
 |---|------|---------|
-| 0 | **Weather** | Current temp · MDI condition icon + text · humidity · wind · 4-row hourly forecast with MDI icons + temp |
-| 1 | **Music** | Album art (Navidrome via HA) · track/artist/album · volume bar with −/+ controls · play/pause/prev/next |
+| 0 | **Weather** | Current icon (48px, left) · temperature (48px, right) · condition label · humidity · feels-like · wind · rain · 6-row hourly forecast with MDI icons |
+| 1 | **Music** | Album art (Navidrome/UPnP via HA) · track/artist/album (CJK multilang) · volume bar with −/+ · play/pause/prev/next · screen auto-wakes on playback |
 | 2 | **Home** | Standing fan · TV LED · Floor lamp · Evening Work scene |
-| 3 | **Photo** | Placeholder (ESPFrame photo page) |
+| 3 | **Photo** | Immich random slideshow — optional album UUID filter |
 
 ### Status bar (top, always visible)
-- **Left**: WiFi signal %
-- **Center**: Clock (HH:MM, Asia/Bangkok)
-- **Right**: Current page name — updates on every swipe
+- **Left**: Current page name — updates on every swipe or dot tap
+- **Center**: 4 navigation dots — tap any dot to jump to that page
+- **Right**: Clock (HH:MM, Asia/Bangkok)
 
-### Navigation bar (bottom, always visible)
-- 4 dot indicators — tap any dot to jump to that page
+### Navigation
 - Swipe left → next page
 - Swipe right → previous page
+- Tap nav dots to jump directly
 
 ---
 
@@ -30,18 +30,21 @@
 ```
 esp32p4-dashboard/
 ├── dashboard.yaml              ← compile this file
-├── secrets.yaml                ← your credentials (copy from .template)
+├── secrets.yaml                ← your credentials (copy from .template, gitignored)
 ├── secrets.yaml.template       ← template with placeholder values
 ├── materialdesignicons.ttf     ← MDI icon font for weather condition glyphs
+├── fonts/
+│   ├── NotoSansCJK-Regular.ttf ← CJK / Korean / Vietnamese base (32,964 glyphs)
+│   └── ThonburiUI-Regular.ttf  ← Thai script supplement (87 glyphs)
 └── pages/
-    ├── weather.yaml            ← Page 0: weather + hourly forecast
+    ├── weather.yaml            ← Page 0: current conditions + 6h hourly forecast
     ├── music.yaml              ← Page 1: music player with album art
     ├── home_ctrl.yaml          ← Page 2: home device controls
-    └── photo.yaml              ← Page 3: photo placeholder
+    └── photo.yaml              ← Page 3: Immich photo slideshow
 
-External component (referenced by absolute path in music.yaml):
+External component (referenced by absolute path):
     espframe-main/components/remote_image/
-    (from https://github.com/jtenniswood/espframe — custom image downloader)
+    (from https://github.com/jtenniswood/espframe)
 ```
 
 ---
@@ -61,74 +64,107 @@ cp secrets.yaml.template secrets.yaml
 # Edit secrets.yaml with your values
 ```
 
-Required fields:
+Required fields in `secrets.yaml`:
 ```yaml
 wifi_ssid: "YourSSID"
 wifi_password: "YourPassword"
 api_key: "your-esphome-api-encryption-key"
 ota_password: "your-ota-password"
+
+# Immich photo server
+immich_url: "https://your-immich-instance"
+immich_api_key: "your-immich-api-key"
+immich_album_uuid: ""          # leave empty for random from all photos
+                               # or set to an album UUID to filter to that album
 ```
 
 ### 3. Update entity IDs
 
-Edit each page YAML to match your Home Assistant setup:
+Edit each page YAML to match your Home Assistant entities:
 
 | File | Entity to change |
 |------|-----------------|
-| `pages/weather.yaml` | `weather.forecast_home` |
+| `pages/weather.yaml` | `weather.googleweather` |
 | `pages/music.yaml` | `media_player.lifeboat_jukebox_upnp_av` |
 | `pages/home_ctrl.yaml` | fan, light, scene entity IDs |
 
-Also update the HA IP (`192.168.1.4`) and token in `dashboard.yaml` http_request headers and in `pages/music.yaml` boot fetch.
+Also update the HA IP (`192.168.1.4`) and long-lived token in `pages/music.yaml` boot fetch.
 
-### 4. Seed forecast sensors in HA (once)
+### 4. Set up hourly forecast sensors in HA
 
-The hourly forecast panel uses 4 virtual HA state sensors. Run this once to create them, then the firmware auto-refreshes every 5 minutes:
+The hourly forecast panel reads 6 virtual HA sensors (`sensor.forecast_h1` to `sensor.forecast_h6`). Use the included helper to create and keep them updated:
 
-```python
-import json, urllib.request
-from datetime import datetime, timezone, timedelta
+```bash
+# Install dependencies
+pip install requests
 
-TOKEN = "your-long-lived-ha-token"
-HA = "http://192.168.1.4:8123"
-TZ = timezone(timedelta(hours=7))  # change to your timezone offset
-
-req = urllib.request.Request(
-    f"{HA}/api/services/weather/get_forecasts?return_response",
-    data=json.dumps({"entity_id":"weather.forecast_home","type":"hourly"}).encode(),
-    headers={"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"},
-    method="POST"
-)
-with urllib.request.urlopen(req) as r:
-    data = json.load(r)
-
-fc = data["service_response"]["weather.forecast_home"]["forecast"]
-for i in range(1, 5):
-    h = fc[i]
-    dt = datetime.fromisoformat(h["datetime"]).astimezone(TZ)
-    state = f"{dt.strftime('%H:%M')},{h.get('condition','--')},{round(h.get('temperature',0))}"
-    payload = json.dumps({"state": state}).encode()
-    req2 = urllib.request.Request(
-        f"{HA}/api/states/sensor.forecast_h{i}",
-        data=payload,
-        headers={"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"},
-        method="POST"
-    )
-    urllib.request.urlopen(req2)
-    print(f"h{i}: {state}")
-# Output: h1: 03:00,rainy,27  h2: 04:00,rainy,27  etc.
+# Run the generator (updates sensors every 5 minutes)
+python3 gen_weather.py --ha http://192.168.1.4:8123 --token YOUR_HA_TOKEN
 ```
+
+Or add `ha_google_weather_hourly_forecast.yaml` to your HA `configuration.yaml` for a native HA template sensor approach.
+
+Sensor state format: `"HH:MM,condition,temp,precip_prob"` e.g. `"14:00,rainy,29,40"`
 
 ### 5. Flash
 
 ```bash
 cd esp32p4-dashboard
-# OTA (device on WiFi):
-esphome upload dashboard.yaml --device 192.168.1.39
+
+# OTA (device already on WiFi):
+esphome run dashboard.yaml
 
 # First-time USB flash:
-esphome run dashboard.yaml
+esphome run dashboard.yaml --device /dev/ttyUSB0
 ```
+
+---
+
+## Immich photo slideshow (Page 3)
+
+- Set `immich_url` and `immich_api_key` in `secrets.yaml`
+- Leave `immich_album_uuid: ""` to show random photos from your entire library
+- Set `immich_album_uuid: "your-album-uuid"` to restrict to a specific album
+- Find the album UUID from the Immich URL: `https://your-immich/albums/{uuid}`
+- Tap the photo to load the next one immediately
+- Also controllable via the **Dashboard Next Photo** button exposed to HA
+
+---
+
+## Home Assistant entities exposed
+
+The dashboard exposes these entities via the native ESPHome API (appear automatically in HA):
+
+| Entity | Type | Description |
+|--------|------|-------------|
+| `sensor.esp32p4_dashboard_dashboard_page` | Text sensor | Current active page name, updates every second |
+| `button.esp32p4_dashboard_dashboard_next_photo` | Button | Trigger next Immich photo remotely |
+| `select.esp32p4_dashboard_dashboard_navigate` | Select | Navigate to Weather / Music / Home / Photo from HA |
+| `light.esp32p4_dashboard_backlight` | Light | Backlight on/off + brightness slider |
+
+### Auto screen-wake on music
+
+When `music_state` transitions to `playing` **and** the screen is currently off (5-minute idle timeout), the device automatically:
+1. Turns the backlight on at 100%
+2. Navigates to the Music page
+
+If the screen is already on, nothing changes — music plays without interrupting the current page.
+
+---
+
+## Multi-language music display
+
+Song title, artist, and album support **Korean, Japanese, Chinese, Vietnamese, and Thai** characters using the bundled `NotoSansCJK-Regular.ttf` + `ThonburiUI-Regular.ttf` fonts.
+
+- **Korean** (Hangul): U+AC00–D7A3 (11,172 syllables)
+- **Chinese/Japanese** (CJK Unified Ideographs): U+4E00–9FFF
+- **Japanese** (Hiragana + Katakana): U+3040–30FF
+- **Vietnamese**: Latin Extended A/B + Additional (partial, what NotoSansCJK covers)
+- **Thai**: from ThonburiUI, U+0E01–0E5B (87 characters)
+
+Font size: 22px for all three labels (title/artist/album) — single size chosen to fit within the 7.9MB OTA flash partition.
+
+> **Note:** The `fonts/` directory contains 14MB `NotoSansCJK-Regular.ttf`. ESPHome subsets this at build time to only the requested glyphs, producing a ~3MB font bitmap in the final firmware.
 
 ---
 
@@ -162,114 +198,113 @@ Uses two complementary mechanisms:
 
 Both call `lvgl.page.next/previous` and `script.execute: nav_dots_refresh`.
 
-### Weather hourly forecast
+### Weather hourly forecast: the hidden 1000-byte body limit
 
-**Problem**: HA's `weather.get_forecasts` service returns ~9,302 bytes. ESPHome's `http_request` `capture_response` body is hardcoded at **1,000 bytes** regardless of `buffer_size_rx` setting.
+**Problem**: HA's `weather.get_forecasts` service returns ~9,302 bytes. ESPHome's `http_request` `capture_response` body is hardcoded at **1,000 bytes** regardless of `buffer_size_rx`.
 
-**Solution**: Store forecasts in 4 compact virtual HA sensor states (`sensor.forecast_h1` to `sensor.forecast_h4`) formatted as `"HH:MM,condition,temp"` (e.g. `"03:00,rainy,27
----
+**Solution**: Store forecasts in 6 compact virtual HA sensor states (`sensor.forecast_h1` to `sensor.forecast_h6`) formatted as `"HH:MM,condition,temp,precip_prob"` (e.g. `"14:00,rainy,29,40"`). Each `/api/states` response is ~400 bytes — well within the limit.
 
-## Architecture and hard-won lessons
+### Album art: remote_image component
 
-### Swipe navigation
-Two mechanisms work simultaneously:
-1. LVGL on_swipe_left/right - built-in LVGL gesture
-2. GT911 on_touch/on_update/on_release - manual dx>80px threshold
-
-Both update current_page, call lvgl.page.next/previous, and refresh nav dots.
-status_page_name updates on both swipe AND dot tap (nav_go script).
-
-### Weather forecast: the hidden 1000-byte body limit
-ESPHome http_request capture_response is hardcoded at 1000 bytes max.
-HA weather.get_forecasts returns ~9302 bytes -- always fails with IncompleteInput.
-
-Solution: 4 compact virtual HA state sensors (sensor.forecast_h1 to h4)
-- Format: "HH:MM,condition,temp" e.g. "03:00,rainy,27"  
-- Each /api/states response is ~400 bytes -- well within limit
-- UTC to local time conversion happens in Python seeding script
-- Device fetches at boot+20s and every 5 minutes via http_request.get
-
-### Album art: why remote_image not online_image
-Built-in online_image component has permanent LVGL refresh issues.
-Used espframe custom remote_image component instead.
+Built-in `online_image` has persistent LVGL refresh issues. Uses the `espframe` custom `remote_image` component instead.
 
 Critical config:
-  type: RGB565
-  byte_order: little_endian   <- required for MIPI DSI
-  formats: [JPEG]
-  buffer_size: 200000         <- must exceed image size (album art = 86-128 KB)
-
-HA native API does NOT push entity_picture on reconnect if unchanged.
-Album art arrives ~30 seconds after boot via text_sensor.
+```yaml
+type: RGB565
+byte_order: little_endian   # required for MIPI DSI
+formats: [JPEG]
+buffer_size: 200000         # must exceed image size (album art = 70–130 KB)
+request_headers:
+  x-api-key: "${immich_api_key}"   # required for Immich thumbnail auth
+```
 
 ### Album art: LVGL image widget refresh
-After remote_image downloads, LVGL still shows stale image (cached descriptor).
-lv_image_set_src must be called again from a context with full LVGL headers.
 
-The on_download_finished callback runs in remote_image context WITHOUT LVGL headers.
-Calling lv_image_set_src there gives "invalid use of incomplete type lv_obj_t".
+After `remote_image` downloads, LVGL still shows the stale image (cached descriptor). `lv_image_set_src` must be called from a context with full LVGL headers.
 
-Working solution (flag + interval in music.yaml):
+The `on_download_finished` callback runs without LVGL headers — calling `lv_image_set_src` there causes a compile error. **Solution**: flag + 500ms interval pattern:
 
-  on_download_finished:
-    - lambda: id(art_needs_refresh) = true;
+```yaml
+on_download_finished:
+  - lambda: id(art_needs_refresh) = true;
 
-  interval:
-    - interval: 500ms
-      then:
-        - if:
-            condition:
-              lambda: return id(art_needs_refresh);
-            then:
-              - lambda: |-
-                  id(art_needs_refresh) = false;
-                  lv_image_set_src(album_art_widget, album_art_img);
-                  lv_obj_invalidate(album_art_widget);
+interval:
+  - interval: 500ms
+    then:
+      - if:
+          condition:
+            lambda: return id(art_needs_refresh);
+          then:
+            - lambda: |-
+                id(art_needs_refresh) = false;
+                lv_image_set_src(album_art_widget, album_art_img);
+                lv_obj_invalidate(album_art_widget);
+```
 
-The interval lambda runs in main.cpp context where album_art_widget is a raw
-lv_obj_t* and lv_image_set_src has full LVGL type definitions available.
+### CJK font: TTC → TTF extraction required
+
+ESPHome only supports `.ttf`, `.otf`, `.woff`, `.bdf`, `.pcf` — not `.ttc` (TrueType Collection). Extract with fonttools:
+
+```python
+from fontTools.ttLib import TTCollection
+ttc = TTCollection('/path/to/NotoSansCJK.ttc')
+ttc[0].save('fonts/NotoSansCJK-Regular.ttf')
+```
+
+ESPHome's `glyphs` field requires **actual character strings** (not hex range notation like `"0x4E00-0x9FFF"`). Generate cmap-filtered strings to avoid missing-glyph validation errors:
+
+```python
+from fontTools.ttLib import TTFont
+cmap = TTFont('fonts/NotoSansCJK-Regular.ttf').getBestCmap()
+chars = ''.join(chr(c) for c in range(0x4E00, 0xA000) if c in cmap)
+```
 
 ### Known pitfalls
 
 | Issue | Fix |
 |-------|-----|
-| execute_from_psram: true | NEVER enable -- causes boot crash |
-| OTA safe_mode rollback | Firmware must run >60s. Album art at boot+30s is safe |
-| buffer_size_rx ignored | http_request body always capped at 1000 bytes |
-| status_clock shows "--:--" | Fixed: clock_tick script now also updates status_clock |
-| status_page_name stuck | Fixed: on_swipe handlers now update it (not just nav_go) |
-| WiFi shows "WiFi" on boot | Fixed: component.update: wifi_pct in on_boot |
-| LVGL image not refreshing | Fixed: lv_image_set_src via interval flag pattern |
+| `execute_from_psram: true` | NEVER enable — causes boot crash |
+| `.ttc` font files | Not supported — extract TTF with fonttools |
+| `glyphs: ["0x4E00-0x9FFF"]` | Invalid — must be actual character strings |
+| Flash overflow with multiple font sizes | Use single font size (22px) for CJK; 3 sizes = ~9.7MB, exceeds 7.9MB partition |
+| OTA safe_mode rollback | Firmware must run >60s before safe_mode clears |
+| `capture_response` body truncated | http_request body capped at ~1000 bytes regardless of `buffer_size_rx` |
+| LVGL image not refreshing | Use flag + interval pattern (see album art section) |
+| Immich thumbnail 401 | Add `request_headers: x-api-key` to `remote_image` definition |
+| Immich album filter | Use `albumIds: ["uuid"]` array, not `albumId: "uuid"` string |
 
 ---
 
 ## MDI weather icons
 
-Uses materialdesignicons.ttf loaded as font id: mdi_weather.
-Condition strings from HA map to MDI Unicode private use area:
+Loaded from `materialdesignicons.ttf` as font ids `mdi_weather` (22px) and `mdi_weather_large` (48px).
 
-  sunny          -> U+F0599
-  clear-night    -> U+F0594
-  partlycloudy   -> U+F0595
-  cloudy         -> U+F0590
-  fog            -> U+F0591
-  rainy          -> U+F0597
-  pouring        -> U+F0596
-  lightning      -> U+F0593
-  lightning-rainy -> U+F067E
-  snowy          -> U+F0598
-  snowy-rainy    -> U+F067F
-  windy          -> U+F059D
-  windy-variant  -> U+F059E
-  hail           -> U+F0592
+HA condition strings map to MDI Unicode private-use codepoints:
 
-Icon mapping happens in C++ lambda (weather.yaml) for both main condition
-and each hourly forecast row.
+| Condition | Glyph |
+|-----------|-------|
+| `sunny` | U+F0599 |
+| `clear-night` | U+F0594 |
+| `partlycloudy` | U+F0595 |
+| `cloudy` | U+F0590 |
+| `fog` | U+F0591 |
+| `rainy` | U+F0597 |
+| `pouring` | U+F0596 |
+| `lightning` | U+F0593 |
+| `lightning-rainy` | U+F067E |
+| `snowy` | U+F0598 |
+| `snowy-rainy` | U+F067F |
+| `windy` | U+F059D |
+| `windy-variant` | U+F059E |
+| `hail` | U+F0592 |
+| `exceptional` | U+F3030 |
 
 ---
 
-## Web UI
+## Web UI & API
 
-Device accessible at http://esp32p4-dashboard.local (ESPHome web server)
-OTA updates: http://esp32p4-dashboard.local (web server OTA)
-ESPHome API: esp32p4-dashboard.local:6053 (noise encrypted)
+| Access | Address |
+|--------|---------|
+| Web dashboard | `http://esp32p4-dashboard.local` |
+| OTA via web | `http://esp32p4-dashboard.local` |
+| ESPHome API | `esp32p4-dashboard.local:6053` (noise encrypted) |
