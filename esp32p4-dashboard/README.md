@@ -64,18 +64,17 @@ cp secrets.yaml.template secrets.yaml
 # Edit secrets.yaml with your values
 ```
 
-Required fields in `secrets.yaml`:
+Fields in `secrets.yaml` (copy from `secrets.yaml.template`):
 ```yaml
-wifi_ssid: "YourSSID"
-wifi_password: "YourPassword"
-api_key: "your-esphome-api-encryption-key"
-ota_password: "your-ota-password"
+wifi_ssid: "YourWiFiName"
+wifi_password: "YourWiFiPassword"
+api_key: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+ota_password: "yourOtaPassword"
 
 # Immich photo server
 immich_url: "https://your-immich-instance"
 immich_api_key: "your-immich-api-key"
-immich_album_uuid: ""          # leave empty for random from all photos
-                               # or set to an album UUID to filter to that album
+immich_album_uuid: ""          # empty = random from all; UUID = specific album
 ```
 
 ### 3. Update entity IDs
@@ -92,19 +91,20 @@ Also update the HA IP (`192.168.1.4`) and long-lived token in `pages/music.yaml`
 
 ### 4. Set up hourly forecast sensors in HA
 
-The hourly forecast panel reads 6 virtual HA sensors (`sensor.forecast_h1` to `sensor.forecast_h6`). Use the included helper to create and keep them updated:
+The hourly forecast panel reads 6 virtual HA sensors (`sensor.forecast_h1` to `sensor.forecast_h6`) updated every 5 minutes by a Home Assistant template trigger.
 
-```bash
-# Install dependencies
-pip install requests
+Add `ha_google_weather_hourly_forecast.yaml` to your HA `configuration.yaml`:
 
-# Run the generator (updates sensors every 5 minutes)
-python3 gen_weather.py --ha http://192.168.1.4:8123 --token YOUR_HA_TOKEN
+```yaml
+# configuration.yaml
+template: !include ha_google_weather_hourly_forecast.yaml
 ```
 
-Or add `ha_google_weather_hourly_forecast.yaml` to your HA `configuration.yaml` for a native HA template sensor approach.
+Or paste its contents under the `template:` key directly. Then restart HA and verify in **Developer Tools → States** that `sensor.forecast_h1` through `sensor.forecast_h6` appear.
 
 Sensor state format: `"HH:MM,condition,temp,precip_prob"` e.g. `"14:00,rainy,29,40"`
+
+> **`gen_weather.py`** and **`gen_weather_yaml.py`** are code-generation tools used during development to regenerate `pages/weather.yaml`. You do not need to run them for normal use.
 
 ### 5. Flash
 
@@ -297,7 +297,7 @@ HA condition strings map to MDI Unicode private-use codepoints:
 | `windy` | U+F059D |
 | `windy-variant` | U+F059E |
 | `hail` | U+F0592 |
-| `exceptional` | U+F3030 |
+| `exceptional` | U+F0CB0 |
 
 ---
 
