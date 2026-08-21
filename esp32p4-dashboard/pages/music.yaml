@@ -347,7 +347,7 @@ lvgl:
                   y: 20
                   width: 460
                   text: "No track playing"
-                  text_font: MONTSERRAT_28
+                  text_font: font_multilang_22
                   text_color: 0xFFFFFF
                   long_mode: SCROLL_CIRCULAR
 
@@ -357,7 +357,7 @@ lvgl:
                   y: 80
                   width: 460
                   text: "Artist"
-                  text_font: MONTSERRAT_22
+                  text_font: font_multilang_22
                   text_color: 0x9BA2BC
                   long_mode: SCROLL_CIRCULAR
 
@@ -367,7 +367,7 @@ lvgl:
                   y: 120
                   width: 460
                   text: "Album"
-                  text_font: MONTSERRAT_18
+                  text_font: font_multilang_22
                   text_color: 0x606880
                   long_mode: SCROLL_CIRCULAR
 

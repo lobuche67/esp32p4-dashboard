@@ -479,29 +479,35 @@ lvgl:
             clickable: false
             widgets:
 
+              # Icon: left-aligned, same 48px as temperature
+              - label:
+                  id: lbl_weather_icon
+                  align: TOP_LEFT
+                  x: 8
+                  y: 24
+                  text: "󰖐"
+                  text_font: mdi_weather_large
+                  text_color: 0xC0C8E0
+
+              # Condition word: below icon, left-aligned
+              - label:
+                  id: lbl_weather_condition
+                  align: TOP_LEFT
+                  x: 8
+                  y: 82
+                  text: "Loading..."
+                  text_font: MONTSERRAT_22
+                  text_color: 0x9BA2BC
+
+              # Temperature: right-aligned, 48px
               - label:
                   id: lbl_weather_temp
-                  align: TOP_MID
+                  align: TOP_RIGHT
+                  x: -8
                   y: 24
                   text: "--°"
                   text_font: MONTSERRAT_48
                   text_color: 0xFFFFFF
-
-              - label:
-                  id: lbl_weather_icon
-                  align: TOP_MID
-                  y: 68
-                  text: "󰖐"
-                  text_font: mdi_weather
-                  text_color: 0xC0C8E0
-
-              - label:
-                  id: lbl_weather_condition
-                  align: TOP_MID
-                  y: 100
-                  text: "Loading..."
-                  text_font: MONTSERRAT_24
-                  text_color: 0xC0C8E0
 
               - obj:
                   align: TOP_MID
