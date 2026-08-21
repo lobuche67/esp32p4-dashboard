@@ -31,9 +31,9 @@ remote_image:
     type: RGB565
     byte_order: little_endian
     formats: [JPEG]
-    buffer_size: 400000
+    buffer_size: 524288
     http_request_id: http_request_component
-    resize: [960, 508]
+    resize: [1024, 564]
     request_headers:
       x-api-key: "${immich_api_key}"
     on_download_finished:
@@ -53,9 +53,6 @@ interval:
                 id(photo_needs_refresh) = false;
                 lv_image_set_src(immich_photo_widget, immich_photo_img);
                 lv_obj_invalidate(immich_photo_widget);
-                if (!id(immich_photo_date).empty()) {
-                  lv_label_set_text(id(lbl_photo_date), id(immich_photo_date).c_str());
-                }
 
 script:
   - id: fetch_immich_photo
@@ -63,7 +60,7 @@ script:
       - logger.log: "Fetching Immich photo..."
       - lvgl.label.update:
           id: lbl_photo_status
-          text: "Loading..."
+          text: ""
       # /api/search/random supports albumId filter — same endpoint for both modes.
       # Album mode:  set immich_album_uuid in secrets.yaml to a valid UUID.
       # Random mode: leave immich_album_uuid as "" to pick from all photos.
@@ -80,7 +77,7 @@ script:
               - lambda: |-
                   if (response->status_code != 200) {
                     ESP_LOGW("photo", "Immich API returned %d", response->status_code);
-                    lv_label_set_text(id(lbl_photo_status), "API error");
+                    lv_label_set_text(id(lbl_photo_status), "Error");
                     return;
                   }
                   // Parse id from JSON array: [{"id":"...","localDateTime":"..."}]
@@ -136,60 +133,21 @@ lvgl:
       gesture_bubble: true
       widgets:
 
-        # Page title bar
-        - label:
-            align: TOP_LEFT
-            x: 48
-            y: 44
-            text: Photos
-            text_font: MONTSERRAT_20
-            text_color: 0x9BA2BC
-
-        # Full-width photo frame (tappable for next photo)
-        - obj:
-            id: photo_frame
-            align: CENTER
-            y: 4
-            width: 984
-            height: 510
-            radius: 16
-            bg_color: 0x111111
-            border_opa: TRANSP
-            shadow_opa: TRANSP
+        # Full-screen photo — fills entire display (status bar floats above)
+        - image:
+            id: immich_photo_widget
+            align: TOP_MID
+            y: 36
+            src: immich_photo_img
             clickable: true
             on_click:
               - script.execute: fetch_immich_photo
-            widgets:
 
-              # The actual photo image
-              - image:
-                  id: immich_photo_widget
-                  align: CENTER
-                  src: immich_photo_img
+        # Error label — only shown on API error, hidden otherwise
+        - label:
+            id: lbl_photo_status
+            align: CENTER
+            text: ""
+            text_font: MONTSERRAT_22
+            text_color: 0xFF4444
 
-              # Loading / status overlay label
-              - label:
-                  id: lbl_photo_status
-                  align: CENTER
-                  y: -20
-                  text: "Tap to load photo"
-                  text_font: MONTSERRAT_22
-                  text_color: 0x4C5080
-
-              # Tap hint
-              - label:
-                  align: CENTER
-                  y: 16
-                  text: "tap for next"
-                  text_font: MONTSERRAT_16
-                  text_color: 0x2A2A50
-
-              # Date label overlay (bottom-right)
-              - label:
-                  id: lbl_photo_date
-                  align: BOTTOM_RIGHT
-                  x: -16
-                  y: -12
-                  text: ""
-                  text_font: MONTSERRAT_16
-                  text_color: 0xC0C8E0

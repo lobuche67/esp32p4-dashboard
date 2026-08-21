@@ -54,7 +54,7 @@ esphome:
         - delay: 500ms
         - light.turn_on:
             id: backlight
-            brightness: 100%
+            brightness: 50%
         - lvgl.resume:
         - lvgl.widget.redraw:
         - script.execute: clock_tick
