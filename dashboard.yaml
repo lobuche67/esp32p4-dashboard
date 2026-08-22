@@ -462,7 +462,9 @@ lvgl:
     then:
       - if:
           condition:
-            lambda: return id(music_state).state != "playing";
+            # Stay on if music is playing OR if on the photo page
+            lambda: return id(music_state).state != "playing" && id(current_page) != 3;
+          then:
           then:
             - light.turn_off: backlight
 
