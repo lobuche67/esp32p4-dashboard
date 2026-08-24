@@ -1,43 +1,9 @@
-# PAGE 2 - Home Control (Campfire area)
-# Fan: Mi Smart Standing Fan 2  (fan.dmaker_sg_810831368_p18_s_2_fan)
-# TV LED: light.tz3210_0zabbfax_ts0503b
-# Floor Lamp: light.tz3210_2cvfxsfr_ts0505b
-# Scene: scene.campfire_evening_work
-
-text_sensor:
-
-  - platform: homeassistant
-    id: hs_fan
-    entity_id: fan.dmaker_sg_810831368_p18_s_2_fan
-    on_value:
-      then:
-        - lvgl.label.update:
-            id: lbl_fan_state
-            text: !lambda |-
-              if (x == "on") return "ON";
-              return "OFF";
-
-  - platform: homeassistant
-    id: hs_bed_light
-    entity_id: light.tz3210_0zabbfax_ts0503b
-    on_value:
-      then:
-        - lvgl.label.update:
-            id: lbl_bed_light_state
-            text: !lambda |-
-              if (x == "on") return "ON";
-              return "OFF";
-
-  - platform: homeassistant
-    id: hs_liv_light
-    entity_id: light.tz3210_2cvfxsfr_ts0505b
-    on_value:
-      then:
-        - lvgl.label.update:
-            id: lbl_liv_light_state
-            text: !lambda |-
-              if (x == "on") return "ON";
-              return "OFF";
+# PAGE 2 - Home Control (Scenes)
+# Good Night:    scene.good_night
+# Good Morning:  scene.good_morning
+# Movie Night:   scene.movie_night
+# Evening Work:  scene.campfire_evening_work
+# Update entity IDs below to match your HA scene names.
 
 lvgl:
   pages:
@@ -48,139 +14,130 @@ lvgl:
       gesture_bubble: true
       widgets:
 
-
-
-        # ── 2x2 grid — Row 1 ─────────────────────────────────────────────
-
-        # Top-left: Standing Fan
+        # Top-left: Good Night
         - obj:
-            id: btn_fan
+            id: btn_good_night
             align: TOP_LEFT
             x: 24
             y: 76
             width: 480
             height: 228
             radius: 24
-            bg_color: 0x1E2035
+            bg_color: 0x1A1A3A
             border_opa: TRANSP
             shadow_opa: TRANSP
             clickable: true
             on_click:
               - homeassistant.action:
-                  action: fan.toggle
+                  action: scene.turn_on
                   data:
-                    entity_id: "fan.dmaker_sg_810831368_p18_s_2_fan"
+                    entity_id: "scene.good_night"
             widgets:
               - label:
                   align: TOP_MID
                   y: 24
-                  text: "Standing Fan"
+                  text: "Good Night"
                   text_font: MONTSERRAT_22
                   text_color: 0xC0C8E0
               - label:
                   align: CENTER
                   y: -10
-                  text: "FAN"
-                  text_font: MONTSERRAT_48
-                  text_color: 0x4C9FFF
+                  text: "NIGHT"
+                  text_font: MONTSERRAT_44
+                  text_color: 0x7B8ECC
               - label:
-                  id: lbl_fan_state
                   align: BOTTOM_MID
                   y: -20
-                  text: "OFF"
+                  text: "Activate"
                   text_font: MONTSERRAT_18
                   text_color: 0x9BA2BC
 
-        # Top-right: TV LED
+        # Top-right: Good Morning
         - obj:
-            id: btn_bed_light
+            id: btn_good_morning
             align: TOP_RIGHT
             x: -24
             y: 76
             width: 480
             height: 228
             radius: 24
-            bg_color: 0x1E2035
+            bg_color: 0x2A1F10
             border_opa: TRANSP
             shadow_opa: TRANSP
             clickable: true
             on_click:
               - homeassistant.action:
-                  action: light.toggle
+                  action: scene.turn_on
                   data:
-                    entity_id: "light.tz3210_0zabbfax_ts0503b"
+                    entity_id: "scene.good_morning"
             widgets:
               - label:
                   align: TOP_MID
                   y: 24
-                  text: "TV LED"
+                  text: "Good Morning"
                   text_font: MONTSERRAT_22
                   text_color: 0xC0C8E0
               - label:
                   align: CENTER
                   y: -10
-                  text: "LIGHT"
-                  text_font: MONTSERRAT_48
+                  text: "MORNING"
+                  text_font: MONTSERRAT_38
                   text_color: 0xF4A900
               - label:
-                  id: lbl_bed_light_state
                   align: BOTTOM_MID
                   y: -20
-                  text: "OFF"
+                  text: "Activate"
                   text_font: MONTSERRAT_18
                   text_color: 0x9BA2BC
 
-        # ── 2x2 grid — Row 2 ─────────────────────────────────────────────
-
-        # Bottom-left: Floor Lamp
+        # Bottom-left: Movie Night
         - obj:
-            id: btn_liv_light
+            id: btn_movie_night
             align: TOP_LEFT
             x: 24
             y: 320
             width: 480
             height: 228
             radius: 24
-            bg_color: 0x1E2035
+            bg_color: 0x1A0A20
             border_opa: TRANSP
             shadow_opa: TRANSP
             clickable: true
             on_click:
               - homeassistant.action:
-                  action: light.toggle
+                  action: scene.turn_on
                   data:
-                    entity_id: "light.tz3210_2cvfxsfr_ts0505b"
+                    entity_id: "scene.movie_night"
             widgets:
               - label:
                   align: TOP_MID
                   y: 24
-                  text: "Floor Lamp"
+                  text: "Movie Night"
                   text_font: MONTSERRAT_22
                   text_color: 0xC0C8E0
               - label:
                   align: CENTER
                   y: -10
-                  text: "LIGHT"
-                  text_font: MONTSERRAT_48
-                  text_color: 0xF4A900
+                  text: "MOVIE"
+                  text_font: MONTSERRAT_44
+                  text_color: 0xD44CFF
               - label:
-                  id: lbl_liv_light_state
                   align: BOTTOM_MID
                   y: -20
-                  text: "OFF"
+                  text: "Activate"
                   text_font: MONTSERRAT_18
                   text_color: 0x9BA2BC
 
-        # Bottom-right: Evening Work Scene
+        # Bottom-right: Evening Work
         - obj:
-            id: btn_sleep
+            id: btn_evening_work
             align: TOP_RIGHT
             x: -24
             y: 320
             width: 480
             height: 228
             radius: 24
-            bg_color: 0x1E2035
+            bg_color: 0x1E1428
             border_opa: TRANSP
             shadow_opa: TRANSP
             clickable: true
