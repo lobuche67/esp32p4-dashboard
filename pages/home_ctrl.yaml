@@ -31,7 +31,7 @@ lvgl:
               - homeassistant.action:
                   action: scene.turn_on
                   data:
-                    entity_id: "scene.good_night"
+                    entity_id: "scene.campfire_good_night"
             widgets:
               - label:
                   align: TOP_MID
@@ -69,7 +69,7 @@ lvgl:
               - homeassistant.action:
                   action: scene.turn_on
                   data:
-                    entity_id: "scene.good_morning"
+                    entity_id: "scene.campfire_good_morning"
             widgets:
               - label:
                   align: TOP_MID
@@ -107,7 +107,7 @@ lvgl:
               - homeassistant.action:
                   action: scene.turn_on
                   data:
-                    entity_id: "scene.movie_night"
+                    entity_id: "scene.campfire_movie_night"
             widgets:
               - label:
                   align: TOP_MID

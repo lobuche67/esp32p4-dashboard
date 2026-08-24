@@ -465,7 +465,6 @@ lvgl:
             # Stay on if music is playing OR if on the photo page
             lambda: return id(music_state).state != "playing" && id(current_page) != 3;
           then:
-          then:
             - light.turn_off: backlight
 
   # Swipe navigation (confirmed working pattern)
