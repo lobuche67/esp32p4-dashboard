@@ -40,6 +40,9 @@ globals:
   - id: music_pos_base_ms
     type: uint32_t
     initial_value: '0'
+  - id: music_muted
+    type: bool
+    initial_value: 'false'
 
 interval:
   - interval: 1s
@@ -173,6 +176,25 @@ text_sensor:
                   update: true
 
 
+binary_sensor:
+  - platform: homeassistant
+    id: music_mute_state
+    entity_id: media_player.lifeboat_jukebox_upnp_av
+    attribute: is_volume_muted
+    on_state:
+      then:
+        - lambda: |-
+            id(music_muted) = x;
+            auto* btn = id(btn_mute);
+            auto* lbl = id(lbl_mute);
+            if (x) {
+              lv_obj_set_style_bg_color(btn, lv_color_hex(0xFF4444), LV_PART_MAIN);
+              lv_label_set_text(lbl, "\U000F075F");
+            } else {
+              lv_obj_set_style_bg_color(btn, lv_color_hex(0x2A2D45), LV_PART_MAIN);
+              lv_label_set_text(lbl, "\U000F057E");
+            }
+
 sensor:
 
   - platform: homeassistant
@@ -181,9 +203,8 @@ sensor:
     attribute: volume_level
     on_value:
       then:
-        - lvgl.bar.update:
-            id: bar_volume
-            value: !lambda return (int)(x * 100);
+        - lambda: |-
+            lv_slider_set_value(id(slider_volume), (int)(x * 100), LV_ANIM_OFF);
         - lvgl.label.update:
             id: lbl_volume_pct
             text:
@@ -249,20 +270,21 @@ lvgl:
                         src: album_art_img
                         id: album_art_widget
 
-              # Volume row: − bar + label
+              # Volume row: mute button + slider + % label
               - obj:
                   align: BOTTOM_MID
                   y: -12
                   width: 370
-                  height: 52
+                  height: 70
                   bg_opa: TRANSP
                   border_opa: TRANSP
                   shadow_opa: TRANSP
                   pad_all: 0
                   clickable: false
                   widgets:
-                    # Volume − button
+                    # Mute / Unmute button
                     - obj:
+                        id: btn_mute
                         align: LEFT_MID
                         x: 0
                         width: 52
@@ -274,57 +296,55 @@ lvgl:
                         clickable: true
                         on_click:
                           - homeassistant.action:
-                              action: media_player.volume_down
+                              action: media_player.volume_mute
                               data:
                                 entity_id: "media_player.lifeboat_jukebox_upnp_av"
+                                is_volume_muted: !lambda return !id(music_muted);
                         widgets:
                           - label:
+                              id: lbl_mute
                               align: CENTER
-                              text: "−"
-                              text_font: MONTSERRAT_28
+                              text: "\U000F057E"
+                              text_font: MONTSERRAT_22
                               text_color: 0x9BA2BC
-                    # Volume bar
-                    - bar:
-                        id: bar_volume
+                    # Volume % label (above slider)
+                    - label:
+                        id: lbl_volume_pct
                         align: CENTER
-                        width: 240
-                        height: 14
+                        y: -24
+                        text: "50%"
+                        text_font: MONTSERRAT_16
+                        text_color: 0x9BA2BC
+                    # Volume slider
+                    - slider:
+                        id: slider_volume
+                        align: CENTER
+                        y: 10
+                        width: 260
+                        height: 20
                         min_value: 0
                         max_value: 100
                         value: 50
                         bg_color: 0x3A4060
                         indicator:
                           bg_color: 0x4C9FFF
-                    # Volume % label
-                    - label:
-                        id: lbl_volume_pct
-                        align: CENTER
-                        y: -20
-                        text: "50%"
-                        text_font: MONTSERRAT_16
-                        text_color: 0x9BA2BC
-                    # Volume + button
-                    - obj:
-                        align: RIGHT_MID
-                        x: 0
-                        width: 52
-                        height: 52
-                        radius: 12
-                        bg_color: 0x2A2D45
-                        border_opa: TRANSP
-                        shadow_opa: TRANSP
-                        clickable: true
-                        on_click:
-                          - homeassistant.action:
-                              action: media_player.volume_up
-                              data:
-                                entity_id: "media_player.lifeboat_jukebox_upnp_av"
-                        widgets:
-                          - label:
-                              align: CENTER
-                              text: "+"
-                              text_font: MONTSERRAT_28
-                              text_color: 0x9BA2BC
+                        knob:
+                          bg_color: 0x4C9FFF
+                          radius: 10
+                          width: 20
+                          height: 20
+                        on_value:
+                          then:
+                            - homeassistant.action:
+                                action: media_player.volume_set
+                                data:
+                                  entity_id: "media_player.lifeboat_jukebox_upnp_av"
+                                  volume_level: !lambda return x / 100.0f;
+                            - lvgl.label.update:
+                                id: lbl_volume_pct
+                                text:
+                                  format: "%d%%"
+                                  args: [x]
 
         # ── RIGHT card: song info + controls ──────────────────────────────
         - obj:

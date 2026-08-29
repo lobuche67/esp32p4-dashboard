@@ -1,9 +1,54 @@
-# PAGE 2 - Home Control (Scenes)
-# Good Night:    scene.good_night
-# Good Morning:  scene.good_morning
-# Movie Night:   scene.movie_night
-# Evening Work:  scene.campfire_evening_work
-# Update entity IDs below to match your HA scene names.
+# PAGE 2 — Home Control
+# Indoor sensors:
+#   Living Room: sensor.ewelink_snzb_02p_temperature / sensor.ewelink_snzb_02p_humidity
+#   Bedroom:     sensor.bedroom_temperature / sensor.bedroom_humidity  (update when sensor added)
+# Scenes: scene.campfire_good_night / good_morning / movie_night / evening_work
+
+sensor:
+
+  - platform: homeassistant
+    id: indoor_living_temp
+    entity_id: sensor.ewelink_snzb_02p_temperature
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_living_temp
+            text:
+              format: "%.1f°"
+              args: [x]
+
+  - platform: homeassistant
+    id: indoor_living_hum
+    entity_id: sensor.ewelink_snzb_02p_humidity
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_living_hum
+            text:
+              format: "%.0f%%"
+              args: [x]
+
+  - platform: homeassistant
+    id: indoor_bedroom_temp
+    entity_id: sensor.bedroom_temperature
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_bedroom_temp
+            text:
+              format: "%.1f°"
+              args: [x]
+
+  - platform: homeassistant
+    id: indoor_bedroom_hum
+    entity_id: sensor.bedroom_humidity
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_bedroom_hum
+            text:
+              format: "%.0f%%"
+              args: [x]
 
 lvgl:
   pages:
@@ -14,15 +59,120 @@ lvgl:
       gesture_bubble: true
       widgets:
 
-        # Top-left: Good Night
+        # ── Sensor row: Living Room + Bedroom ─────────────────────────────
+        - obj:
+            id: card_living_room
+            align: TOP_LEFT
+            x: 24
+            y: 52
+            width: 468
+            height: 110
+            radius: 20
+            bg_color: 0x0F1E30
+            border_opa: TRANSP
+            shadow_opa: TRANSP
+            pad_all: 0
+            clickable: false
+            widgets:
+              - label:
+                  align: TOP_LEFT
+                  x: 16
+                  y: 10
+                  text: "Living Room"
+                  text_font: MONTSERRAT_16
+                  text_color: 0x9BA2BC
+              - label:
+                  id: lbl_living_temp
+                  align: TOP_LEFT
+                  x: 16
+                  y: 36
+                  text: "--°"
+                  text_font: MONTSERRAT_34
+                  text_color: 0xFFFFFF
+              - label:
+                  align: TOP_LEFT
+                  x: 16
+                  y: 82
+                  text: "Temp"
+                  text_font: MONTSERRAT_12
+                  text_color: 0x666E88
+              - label:
+                  id: lbl_living_hum
+                  align: TOP_RIGHT
+                  x: -16
+                  y: 36
+                  text: "--%"
+                  text_font: MONTSERRAT_34
+                  text_color: 0x4C9FFF
+              - label:
+                  align: TOP_RIGHT
+                  x: -16
+                  y: 82
+                  text: "RH"
+                  text_font: MONTSERRAT_12
+                  text_color: 0x666E88
+
+        - obj:
+            id: card_bedroom
+            align: TOP_RIGHT
+            x: -24
+            y: 52
+            width: 468
+            height: 110
+            radius: 20
+            bg_color: 0x1A0F2A
+            border_opa: TRANSP
+            shadow_opa: TRANSP
+            pad_all: 0
+            clickable: false
+            widgets:
+              - label:
+                  align: TOP_LEFT
+                  x: 16
+                  y: 10
+                  text: "Bedroom"
+                  text_font: MONTSERRAT_16
+                  text_color: 0x9BA2BC
+              - label:
+                  id: lbl_bedroom_temp
+                  align: TOP_LEFT
+                  x: 16
+                  y: 36
+                  text: "--°"
+                  text_font: MONTSERRAT_34
+                  text_color: 0xFFFFFF
+              - label:
+                  align: TOP_LEFT
+                  x: 16
+                  y: 82
+                  text: "Temp"
+                  text_font: MONTSERRAT_12
+                  text_color: 0x666E88
+              - label:
+                  id: lbl_bedroom_hum
+                  align: TOP_RIGHT
+                  x: -16
+                  y: 36
+                  text: "--%"
+                  text_font: MONTSERRAT_34
+                  text_color: 0x4C9FFF
+              - label:
+                  align: TOP_RIGHT
+                  x: -16
+                  y: 82
+                  text: "RH"
+                  text_font: MONTSERRAT_12
+                  text_color: 0x666E88
+
+        # ── Scene buttons row 1 ───────────────────────────────────────────
         - obj:
             id: btn_good_night
             align: TOP_LEFT
             x: 24
-            y: 76
-            width: 480
-            height: 228
-            radius: 24
+            y: 180
+            width: 468
+            height: 170
+            radius: 20
             bg_color: 0x1A1A3A
             border_opa: TRANSP
             shadow_opa: TRANSP
@@ -35,32 +185,25 @@ lvgl:
             widgets:
               - label:
                   align: TOP_MID
-                  y: 24
+                  y: 22
                   text: "Good Night"
                   text_font: MONTSERRAT_22
                   text_color: 0xC0C8E0
               - label:
-                  align: CENTER
-                  y: -10
-                  text: "NIGHT"
-                  text_font: MONTSERRAT_44
-                  text_color: 0x7B8ECC
-              - label:
                   align: BOTTOM_MID
-                  y: -20
+                  y: -22
                   text: "Activate"
-                  text_font: MONTSERRAT_18
-                  text_color: 0x9BA2BC
+                  text_font: MONTSERRAT_14
+                  text_color: 0x7B8ECC
 
-        # Top-right: Good Morning
         - obj:
             id: btn_good_morning
             align: TOP_RIGHT
             x: -24
-            y: 76
-            width: 480
-            height: 228
-            radius: 24
+            y: 180
+            width: 468
+            height: 170
+            radius: 20
             bg_color: 0x2A1F10
             border_opa: TRANSP
             shadow_opa: TRANSP
@@ -73,32 +216,26 @@ lvgl:
             widgets:
               - label:
                   align: TOP_MID
-                  y: 24
+                  y: 22
                   text: "Good Morning"
                   text_font: MONTSERRAT_22
                   text_color: 0xC0C8E0
               - label:
-                  align: CENTER
-                  y: -10
-                  text: "MORNING"
-                  text_font: MONTSERRAT_38
-                  text_color: 0xF4A900
-              - label:
                   align: BOTTOM_MID
-                  y: -20
+                  y: -22
                   text: "Activate"
-                  text_font: MONTSERRAT_18
-                  text_color: 0x9BA2BC
+                  text_font: MONTSERRAT_14
+                  text_color: 0xCC9B50
 
-        # Bottom-left: Movie Night
+        # ── Scene buttons row 2 ───────────────────────────────────────────
         - obj:
             id: btn_movie_night
             align: TOP_LEFT
             x: 24
-            y: 320
-            width: 480
-            height: 228
-            radius: 24
+            y: 368
+            width: 468
+            height: 170
+            radius: 20
             bg_color: 0x1A0A20
             border_opa: TRANSP
             shadow_opa: TRANSP
@@ -111,33 +248,26 @@ lvgl:
             widgets:
               - label:
                   align: TOP_MID
-                  y: 24
+                  y: 22
                   text: "Movie Night"
                   text_font: MONTSERRAT_22
                   text_color: 0xC0C8E0
               - label:
-                  align: CENTER
-                  y: -10
-                  text: "MOVIE"
-                  text_font: MONTSERRAT_44
-                  text_color: 0xD44CFF
-              - label:
                   align: BOTTOM_MID
-                  y: -20
+                  y: -22
                   text: "Activate"
-                  text_font: MONTSERRAT_18
-                  text_color: 0x9BA2BC
+                  text_font: MONTSERRAT_14
+                  text_color: 0xA060CC
 
-        # Bottom-right: Evening Work
         - obj:
             id: btn_evening_work
             align: TOP_RIGHT
             x: -24
-            y: 320
-            width: 480
-            height: 228
-            radius: 24
-            bg_color: 0x1E1428
+            y: 368
+            width: 468
+            height: 170
+            radius: 20
+            bg_color: 0x102010
             border_opa: TRANSP
             shadow_opa: TRANSP
             clickable: true
@@ -149,19 +279,13 @@ lvgl:
             widgets:
               - label:
                   align: TOP_MID
-                  y: 24
+                  y: 22
                   text: "Evening Work"
                   text_font: MONTSERRAT_22
                   text_color: 0xC0C8E0
               - label:
-                  align: CENTER
-                  y: -10
-                  text: "SCENE"
-                  text_font: MONTSERRAT_44
-                  text_color: 0x926BC7
-              - label:
                   align: BOTTOM_MID
-                  y: -20
+                  y: -22
                   text: "Activate"
-                  text_font: MONTSERRAT_18
-                  text_color: 0x9BA2BC
+                  text_font: MONTSERRAT_14
+                  text_color: 0x60CC80

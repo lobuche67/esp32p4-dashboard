@@ -31,15 +31,15 @@ font:
 # =============================================================================
 # Pages (included below as packages):
 #   0 = Weather     pages/weather.yaml
-#   1 = Music       pages/music.yaml
-#   2 = Home        pages/home_ctrl.yaml
+#   1 = Home        pages/home_ctrl.yaml
+#   2 = Music       pages/music.yaml
 #   3 = Photo       pages/photo.yaml
 # =============================================================================
 
 packages:
   weather:   !include pages/weather.yaml
-  music:     !include pages/music.yaml
   home_ctrl: !include pages/home_ctrl.yaml
+  music:     !include pages/music.yaml
   photo:     !include pages/photo.yaml
 
 # =============================================================================
@@ -192,22 +192,18 @@ touchscreen:
             int dx = id(swipe_end_x) - id(swipe_start_x);
             return dx < -80 && id(current_page) < 3;
         then:
-          - lambda: id(current_page)++;
-          - lvgl.page.next:
-              animation: OUT_RIGHT
-              time: 300ms
-          - script.execute: nav_dots_refresh
+          - script.execute:
+              id: nav_go
+              idx: !lambda "return id(current_page) + 1;"
     - if:
         condition:
           lambda: |-
             int dx = id(swipe_end_x) - id(swipe_start_x);
             return dx > 80 && id(current_page) > 0;
         then:
-          - lambda: id(current_page)--;
-          - lvgl.page.previous:
-              animation: OUT_LEFT
-              time: 300ms
-          - script.execute: nav_dots_refresh
+          - script.execute:
+              id: nav_go
+              idx: !lambda "return id(current_page) - 1;"
     - lambda: |-
         id(swipe_start_x) = 0;
         id(swipe_end_x) = 0;
@@ -299,7 +295,7 @@ text_sensor:
     name: "Dashboard Page"
     icon: "mdi:tablet-dashboard"
     lambda: |-
-      static const char* names[] = {"Weather","Music","Home","Photo"};
+      static const char* names[] = {"Weather","Home","Music","Photo"};
       int p = id(current_page);
       if (p < 0 || p > 3) return {"Unknown"};
       return {names[p]};
@@ -321,8 +317,8 @@ select:
     id: ha_page_select
     options:
       - "Weather"
-      - "Music"
       - "Home"
+      - "Music"
       - "Photo"
     initial_option: "Weather"
     optimistic: true
@@ -331,8 +327,8 @@ select:
           id: nav_go
           idx: !lambda |-
             if (x == "Weather") return 0;
-            if (x == "Music")   return 1;
-            if (x == "Home")    return 2;
+            if (x == "Home")    return 1;
+            if (x == "Music")   return 2;
             return 3;
 
 # =============================================================================
@@ -420,18 +416,18 @@ script:
           condition:
             lambda: return id(current_page) == 1;
           then:
-            - lvgl.page.show: page_music
-            - lvgl.label.update:
-                id: status_page_name
-                text: "Music"
-      - if:
-          condition:
-            lambda: return id(current_page) == 2;
-          then:
             - lvgl.page.show: page_home
             - lvgl.label.update:
                 id: status_page_name
                 text: "Home"
+      - if:
+          condition:
+            lambda: return id(current_page) == 2;
+          then:
+            - lvgl.page.show: page_music
+            - lvgl.label.update:
+                id: status_page_name
+                text: "Music"
       - if:
           condition:
             lambda: return id(current_page) == 3;
@@ -441,6 +437,7 @@ script:
                 id: status_page_name
                 text: "Photo"
       - script.execute: nav_dots_refresh
+      - lvgl.widget.redraw:
 
 # =============================================================================
 # LVGL — shared top layer: status bar + nav dots + swipe handler
@@ -474,16 +471,9 @@ lvgl:
         condition:
           lambda: return id(current_page) < 3;
         then:
-          - lambda: id(current_page)++;
-          - lvgl.page.next:
-              animation: OUT_RIGHT
-              time: 300ms
-          - script.execute: nav_dots_refresh
-          - lvgl.label.update:
-              id: status_page_name
-              text: !lambda |-
-                static const char* names[] = {"Weather","Music","Home","Photo"};
-                return names[id(current_page)];
+          - script.execute:
+              id: nav_go
+              idx: !lambda "return id(current_page) + 1;"
 
   on_swipe_right:
     - lambda: "lv_indev_wait_release(lv_indev_get_act());"
@@ -491,16 +481,9 @@ lvgl:
         condition:
           lambda: return id(current_page) > 0;
         then:
-          - lambda: id(current_page)--;
-          - lvgl.page.previous:
-              animation: OUT_LEFT
-              time: 300ms
-          - script.execute: nav_dots_refresh
-          - lvgl.label.update:
-              id: status_page_name
-              text: !lambda |-
-                static const char* names[] = {"Weather","Music","Home","Photo"};
-                return names[id(current_page)];
+          - script.execute:
+              id: nav_go
+              idx: !lambda "return id(current_page) - 1;"
 
   # Shared top layer: status bar + nav dots (drawn over every page)
   top_layer:
@@ -515,7 +498,7 @@ lvgl:
           height: 36
           pad_all: 0
           bg_color: 0x1A1A2E
-          bg_opa: 78%
+          bg_opa: COVER
           border_opa: TRANSP
           shadow_opa: TRANSP
           radius: 0

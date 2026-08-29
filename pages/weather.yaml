@@ -2,6 +2,11 @@
 # Current conditions: weather.googleweather via platform: homeassistant
 # Hourly forecast:    sensor.forecast_h1..h6 (add ha_google_weather_hourly_forecast.yaml to HA)
 # State format:       "HH:MM,condition,temperature,precip_prob"
+#
+# Public holidays (platform: homeassistant text_sensor):
+#   sensor.next_th_holiday  — state: "Holiday Name"  attribute days_away: N
+#   sensor.next_my_holiday  — state: "Holiday Name"  attribute days_away: N
+# Update entity IDs below to match your HA sensor names.
 
 # ── Current conditions ────────────────────────────────────────────────────────
 sensor:
@@ -67,13 +72,127 @@ sensor:
 
 text_sensor:
 
+  # -- Holiday names (sensor state) ---------------------------------------------
+  - platform: homeassistant
+    id: ha_next_th_holiday
+    entity_id: sensor.next_holiday_thailand
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_holiday_th_name
+            text: !lambda return x.c_str();
+
+  - platform: homeassistant
+    id: ha_next_my_holiday
+    entity_id: sensor.next_holiday_malaysia
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_holiday_my_name
+            text: !lambda return x.c_str();
+
+  - platform: homeassistant
+    id: ha_next_id_holiday
+    entity_id: sensor.next_holiday_indonesia
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_holiday_id_name
+            text: !lambda return x.c_str();
+
+  # -- Holiday date attribute -> days-away labels --------------------------------
+  # HA attribute "date" format: "13 Oct 2026"
+  - platform: homeassistant
+    id: ha_th_holiday_date
+    entity_id: sensor.next_holiday_thailand
+    attribute: date
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_holiday_th_days
+            text: !lambda |-
+              static const char* mons[] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
+              int d=0, mo=0, y=0; char ms[4]={};
+              if (sscanf(x.c_str(), "%d %3s %d", &d, ms, &y) != 3) return x.c_str();
+              for (int i=0;i<12;i++) if (strcmp(ms,mons[i])==0){mo=i+1;break;}
+              if (!mo) return x.c_str();
+              auto now = id(sntp_time).now();
+              if (!now.is_valid()) return x.c_str();
+              auto rata = [](int Y,int M,int D) -> long {
+                if(M<3){Y--;M+=12;}
+                return 365L*Y + Y/4 - Y/100 + Y/400 + (153*M-457)/5 + D - 306;
+              };
+              long diff = rata(y,mo,d) - rata(now.year,now.month,now.day_of_month);
+              if(diff<0) return "passed";
+              if(diff==0) return "today";
+              if(diff==1) return "tomorrow";
+              static char buf[14];
+              snprintf(buf,sizeof(buf),"in %ld days",(long)diff);
+              return buf;
+
+  - platform: homeassistant
+    id: ha_my_holiday_date
+    entity_id: sensor.next_holiday_malaysia
+    attribute: date
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_holiday_my_days
+            text: !lambda |-
+              static const char* mons[] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
+              int d=0, mo=0, y=0; char ms[4]={};
+              if (sscanf(x.c_str(), "%d %3s %d", &d, ms, &y) != 3) return x.c_str();
+              for (int i=0;i<12;i++) if (strcmp(ms,mons[i])==0){mo=i+1;break;}
+              if (!mo) return x.c_str();
+              auto now = id(sntp_time).now();
+              if (!now.is_valid()) return x.c_str();
+              auto rata = [](int Y,int M,int D) -> long {
+                if(M<3){Y--;M+=12;}
+                return 365L*Y + Y/4 - Y/100 + Y/400 + (153*M-457)/5 + D - 306;
+              };
+              long diff = rata(y,mo,d) - rata(now.year,now.month,now.day_of_month);
+              if(diff<0) return "passed";
+              if(diff==0) return "today";
+              if(diff==1) return "tomorrow";
+              static char buf[14];
+              snprintf(buf,sizeof(buf),"in %ld days",(long)diff);
+              return buf;
+
+  - platform: homeassistant
+    id: ha_id_holiday_date
+    entity_id: sensor.next_holiday_indonesia
+    attribute: date
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_holiday_id_days
+            text: !lambda |-
+              static const char* mons[] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
+              int d=0, mo=0, y=0; char ms[4]={};
+              if (sscanf(x.c_str(), "%d %3s %d", &d, ms, &y) != 3) return x.c_str();
+              for (int i=0;i<12;i++) if (strcmp(ms,mons[i])==0){mo=i+1;break;}
+              if (!mo) return x.c_str();
+              auto now = id(sntp_time).now();
+              if (!now.is_valid()) return x.c_str();
+              auto rata = [](int Y,int M,int D) -> long {
+                if(M<3){Y--;M+=12;}
+                return 365L*Y + Y/4 - Y/100 + Y/400 + (153*M-457)/5 + D - 306;
+              };
+              long diff = rata(y,mo,d) - rata(now.year,now.month,now.day_of_month);
+              if(diff<0) return "passed";
+              if(diff==0) return "today";
+              if(diff==1) return "tomorrow";
+              static char buf[14];
+              snprintf(buf,sizeof(buf),"in %ld days",(long)diff);
+              return buf;
+
   - platform: homeassistant
     id: weather_condition
     entity_id: weather.googleweather
     on_value:
       then:
         - lambda: |-
-            if(x=="sunny") id(weather_icon_str)="󰖙";
+            if(x=="sunny") id(weather_icon_str)="󰆙";
             if(x=="clear-night") id(weather_icon_str)="󰖔";
             if(x=="partlycloudy") id(weather_icon_str)="󰖕";
             if(x=="cloudy") id(weather_icon_str)="󰖐";
@@ -464,13 +583,15 @@ lvgl:
       gesture_bubble: true
       widgets:
 
-        # Left: current conditions
+        # Left: current conditions + holiday strip
+        # height=510: internal content area = 510-32(top)-32(bottom)=446px
+        # Last holiday row at y:442 + ~16px font = 458px ✓
         - obj:
             align: TOP_LEFT
             x: 24
             y: 76
             width: 460
-            height: 458
+            height: 510
             radius: 24
             bg_color: 0x1E2030
             border_opa: TRANSP
@@ -511,7 +632,7 @@ lvgl:
 
               - obj:
                   align: TOP_MID
-                  y: 158
+                  y: 140
                   width: 380
                   height: 2
                   bg_color: 0x3A4060
@@ -522,7 +643,7 @@ lvgl:
               - label:
                   align: TOP_LEFT
                   x: 8
-                  y: 178
+                  y: 160
                   text: "Humidity"
                   text_font: MONTSERRAT_22
                   text_color: 0x9BA2BC
@@ -531,7 +652,7 @@ lvgl:
                   id: lbl_weather_hum
                   align: TOP_RIGHT
                   x: -8
-                  y: 178
+                  y: 160
                   text: "--%"
                   text_font: MONTSERRAT_22
                   text_color: 0xC0C8E0
@@ -539,7 +660,7 @@ lvgl:
               - label:
                   align: TOP_LEFT
                   x: 8
-                  y: 230
+                  y: 212
                   text: "Feels"
                   text_font: MONTSERRAT_22
                   text_color: 0x9BA2BC
@@ -548,7 +669,7 @@ lvgl:
                   id: lbl_weather_feels
                   align: TOP_RIGHT
                   x: -8
-                  y: 230
+                  y: 212
                   text: "--°"
                   text_font: MONTSERRAT_22
                   text_color: 0xC0C8E0
@@ -556,7 +677,7 @@ lvgl:
               - label:
                   align: TOP_LEFT
                   x: 8
-                  y: 282
+                  y: 264
                   text: "Wind"
                   text_font: MONTSERRAT_22
                   text_color: 0x9BA2BC
@@ -565,7 +686,7 @@ lvgl:
                   id: lbl_weather_wind
                   align: TOP_RIGHT
                   x: -8
-                  y: 282
+                  y: 264
                   text: "-- km/h"
                   text_font: MONTSERRAT_22
                   text_color: 0xC0C8E0
@@ -573,7 +694,7 @@ lvgl:
               - label:
                   align: TOP_LEFT
                   x: 8
-                  y: 334
+                  y: 316
                   text: "Rain"
                   text_font: MONTSERRAT_22
                   text_color: 0x9BA2BC
@@ -582,10 +703,102 @@ lvgl:
                   id: lbl_weather_precip
                   align: TOP_RIGHT
                   x: -8
-                  y: 334
+                  y: 316
                   text: "--%"
                   text_font: MONTSERRAT_22
                   text_color: 0xC0C8E0
+
+              # ── Holiday divider ──────────────────────────────────────────
+              - obj:
+                  align: TOP_MID
+                  y: 352
+                  width: 380
+                  height: 2
+                  bg_color: 0x3A4060
+                  border_opa: TRANSP
+                  shadow_opa: TRANSP
+                  pad_all: 0
+
+              # TH holiday row
+              - label:
+                  align: TOP_LEFT
+                  x: 8
+                  y: 366
+                  text: "TH"
+                  text_font: MONTSERRAT_14
+                  text_color: 0x666E88
+              - label:
+                  id: lbl_holiday_th_name
+                  align: TOP_LEFT
+                  width: 220
+                  long_mode: DOT
+                  x: 40
+                  y: 366
+                  text: "..."
+                  text_font: MONTSERRAT_14
+                  text_color: 0xC0C8E0
+              - label:
+                  id: lbl_holiday_th_days
+                  align: TOP_RIGHT
+                  x: -8
+                  y: 366
+                  text: "..."
+                  text_font: MONTSERRAT_14
+                  text_color: 0x4C9FFF
+
+              # MY holiday row
+              - label:
+                  align: TOP_LEFT
+                  x: 8
+                  y: 390
+                  text: "MY"
+                  text_font: MONTSERRAT_14
+                  text_color: 0x666E88
+              - label:
+                  id: lbl_holiday_my_name
+                  align: TOP_LEFT
+                  width: 220
+                  long_mode: DOT
+                  x: 40
+                  y: 390
+                  text: "..."
+                  text_font: MONTSERRAT_14
+                  text_color: 0xC0C8E0
+              - label:
+                  id: lbl_holiday_my_days
+                  align: TOP_RIGHT
+                  x: -8
+                  y: 390
+                  text: "..."
+                  text_font: MONTSERRAT_14
+                  text_color: 0x4C9FFF
+
+              # ID holiday row
+              - label:
+                  align: TOP_LEFT
+                  x: 8
+                  y: 414
+                  text: "ID"
+                  text_font: MONTSERRAT_14
+                  text_color: 0x666E88
+              - label:
+                  id: lbl_holiday_id_name
+                  align: TOP_LEFT
+                  width: 220
+                  long_mode: DOT
+                  x: 40
+                  y: 414
+                  text: "..."
+                  text_font: MONTSERRAT_14
+                  text_color: 0xC0C8E0
+              - label:
+                  id: lbl_holiday_id_days
+                  align: TOP_RIGHT
+                  x: -8
+                  y: 414
+                  text: "..."
+                  text_font: MONTSERRAT_14
+                  text_color: 0x4C9FFF
 
         # Right: hourly forecast
         - obj:
@@ -593,7 +806,7 @@ lvgl:
             x: -24
             y: 76
             width: 460
-            height: 458
+            height: 510
             radius: 24
             bg_color: 0x1E2030
             border_opa: TRANSP
