@@ -8,9 +8,9 @@
 
 | # | Page | Features |
 |---|------|---------|
-| 0 | **Weather** | Current icon (48px, left) · temperature (48px, right) · condition label · humidity · feels-like · wind · rain · 6-row hourly forecast with MDI icons |
-| 1 | **Music** | Album art (Navidrome/UPnP via HA) · track/artist/album (CJK multilang) · volume bar with −/+ · play/pause/prev/next · screen auto-wakes on playback |
-| 2 | **Home** | Standing fan · TV LED · Floor lamp · Evening Work scene |
+| 0 | **Weather** | Current condition icon (48px) · temperature · feels-like · humidity · wind · rain probability · 6-row hourly forecast (time/icon/temp/rain%) · next public holiday countdown for TH / MY / ID |
+| 1 | **Home** | Living room & bedroom temp+humidity cards · Good Night / Good Morning / Movie Night / Work From Home scene buttons |
+| 2 | **Music** | Album art (Navidrome/UPnP via HA) · track/artist/album (CJK multilang) · volume bar with −/+ · play/pause/prev/next · screen auto-wakes on playback |
 | 3 | **Photo** | Immich random slideshow — optional album UUID filter |
 
 ### Status bar (top, always visible)
@@ -38,8 +38,8 @@ esp32p4-dashboard/
 │   └── ThonburiUI-Regular.ttf  ← Thai script supplement (87 glyphs)
 └── pages/
     ├── weather.yaml            ← Page 0: current conditions + 6h hourly forecast
-    ├── music.yaml              ← Page 1: music player with album art
-    ├── home_ctrl.yaml          ← Page 2: home device controls
+    ├── home_ctrl.yaml          ← Page 1: home device controls
+    ├── music.yaml              ← Page 2: music player with album art
     └── photo.yaml              ← Page 3: Immich photo slideshow
 
 External component (referenced by absolute path):
@@ -83,9 +83,9 @@ Edit each page YAML to match your Home Assistant entities:
 
 | File | Entity to change |
 |------|-----------------|
-| `pages/weather.yaml` | `weather.googleweather` |
+| `pages/weather.yaml` | `weather.googleweather` · `sensor.weather_precip_now` · `sensor.next_holiday_thailand/malaysia/indonesia` · `sensor.forecast_h1`–`h6` |
 | `pages/music.yaml` | `media_player.lifeboat_jukebox_upnp_av` |
-| `pages/home_ctrl.yaml` | fan, light, scene entity IDs |
+| `pages/home_ctrl.yaml` | `sensor.ewelink_snzb_02p_temperature/humidity` · `sensor.bedroom_temperature/humidity` · scene entity IDs (`scene.campfire_good_night`, `scene.campfire_good_morning`, etc.) |
 
 Also update the HA IP (`192.168.1.4`) and long-lived token in `pages/music.yaml` boot fetch.
 
@@ -139,7 +139,7 @@ The dashboard exposes these entities via the native ESPHome API (appear automati
 |--------|------|-------------|
 | `sensor.esp32p4_dashboard_dashboard_page` | Text sensor | Current active page name, updates every second |
 | `button.esp32p4_dashboard_dashboard_next_photo` | Button | Trigger next Immich photo remotely |
-| `select.esp32p4_dashboard_dashboard_navigate` | Select | Navigate to Weather / Music / Home / Photo from HA |
+| `select.esp32p4_dashboard_dashboard_navigate` | Select | Navigate to Weather / Home / Music / Photo from HA |
 | `light.esp32p4_dashboard_backlight` | Light | Backlight on/off + brightness slider |
 
 ### Auto screen-wake on music
@@ -192,11 +192,20 @@ Font size: 22px for all three labels (title/artist/album) — single size chosen
 
 ### Swipe navigation
 
-Uses two complementary mechanisms:
-1. **LVGL `on_swipe_left/right`** — built-in LVGL gesture recognition
-2. **Touchscreen `on_touch/on_update/on_release`** — manual swipe tracking (dx > 80px threshold)
+Uses a single unified path to avoid the "status label stuck on Weather" bug:
 
-Both call `lvgl.page.next/previous` and `script.execute: nav_dots_refresh`.
+1. **Touchscreen `on_release`** — manual swipe tracking (dx threshold ±80px) calls `script.execute: nav_go` with the target page index.
+2. **LVGL `on_swipe_left/right`** — secondary path, also calls `nav_go`.
+
+All navigation (swipe, dot tap, HA select) routes through `nav_go`, which atomically:
+- Sets `current_page`
+- Shows the target LVGL page
+- Updates the `status_page_name` label
+- Refreshes nav dots
+- Triggers a full redraw
+
+**Why not use `lvgl.page.next/previous` directly from `on_release`?**
+The GT911 touchscreen on this hardware does not reliably fire LVGL's built-in swipe gestures. The touchscreen raw touch tracking is the primary swipe path. Previously the `on_release` handler called `lvgl.page.next/previous` without updating the status bar label, causing the label to be permanently stuck on "Weather". Routing everything through `nav_go` fixes this.
 
 ### Weather hourly forecast: the hidden 1000-byte body limit
 
@@ -272,6 +281,8 @@ chars = ''.join(chr(c) for c in range(0x4E00, 0xA000) if c in cmap)
 | LVGL image not refreshing | Use flag + interval pattern (see album art section) |
 | Immich thumbnail 401 | Add `request_headers: x-api-key` to `remote_image` definition |
 | Immich album filter | Use `albumIds: ["uuid"]` array, not `albumId: "uuid"` string |
+| Status bar label stuck on first page | Never call `lvgl.page.next/previous` directly — always route through `nav_go` script so label + dots update atomically |
+| GT911 swipe gestures unreliable | GT911 does not reliably fire LVGL `on_swipe_*` — use touchscreen `on_release` dx threshold as primary path |
 
 ---
 
