@@ -459,8 +459,12 @@ lvgl:
     then:
       - if:
           condition:
-            # Stay on if music is playing OR if on the photo page
-            lambda: return id(music_state).state != "playing" && id(current_page) != 3;
+            # Sleep unless: (music playing AND on music page) OR (on photo page)
+            # i.e. normal idle applies everywhere else, even if music is playing on another page
+            lambda: |-
+              bool music_on_music_page = id(music_state).state == "playing" && id(current_page) == 2;
+              bool on_photo_page = id(current_page) == 3;
+              return !music_on_music_page && !on_photo_page;
           then:
             - light.turn_off: backlight
 
