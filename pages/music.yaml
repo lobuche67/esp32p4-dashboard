@@ -12,7 +12,7 @@ esphome:
         - http_request.get:
             url: "http://192.168.1.4:8123/api/states/media_player.lifeboat_jukebox_upnp_av"
             request_headers:
-              Authorization: "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJjZGE1MDY1MDNhMjE0ZDU2OGM0NWUyOTFiZTdiNDY1MCIsImlhdCI6MTc4NzE1MzA5MSwiZXhwIjoyMTAyNTEzMDkxfQ.xPpAA16OiNYACz_M4sN4MLde7AMVsvdj6pH6DIQ1oJA"
+              Authorization: !secret ha_token
             capture_response: true
             on_response:
               then:
