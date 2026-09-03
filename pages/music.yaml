@@ -85,7 +85,7 @@ remote_image:
     format: JPEG
     type: RGB565
     byte_order: little_endian
-    formats: [JPEG]
+    formats: [JPEG, PNG]
     buffer_size: 200000
     http_request_id: http_request_component
     resize: [280, 280]
