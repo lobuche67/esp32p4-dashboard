@@ -163,7 +163,16 @@ git commit -m "feat: describe your change"
 git push origin main
 ```
 
-If push fails with **"Invalid username or token"**, the stored PAT in the remote URL has expired. Update it:
+`git push` works without any password prompt because the GitHub PAT is **embedded directly in the remote URL**, stored in `.git/config` (local to this machine only, never committed):
+
+```
+[remote "origin"]
+    url = https://github_pat_XXXX@github.com/lobuche67/esp32p4-dashboard.git
+```
+
+To view it: `git remote get-url origin`
+
+If push fails with **"Invalid username or token"**, the token has expired or been revoked. Update it:
 
 ```bash
 git remote set-url origin https://NEW_PAT@github.com/lobuche67/esp32p4-dashboard.git
