@@ -85,7 +85,7 @@ Edit each page YAML to match your Home Assistant entities:
 |------|-----------------|
 | `pages/weather.yaml` | `weather.googleweather` · `sensor.weather_precip_now` · `sensor.next_holiday_thailand/malaysia/indonesia` · `sensor.forecast_h1`–`h6` |
 | `pages/music.yaml` | `media_player.lifeboat_jukebox_upnp_av` |
-| `pages/home_ctrl.yaml` | `sensor.ewelink_snzb_02p_temperature/humidity` · `sensor.bedroom_temperature/humidity` · scene entity IDs (`scene.campfire_good_night`, `scene.campfire_good_morning`, etc.) |
+| `pages/home_ctrl.yaml` | Living room: `sensor.ewelink_snzb_02p_temperature` / `sensor.ewelink_snzb_02p_humidity` · Bedroom: `sensor.ewelink_snzb_02p_temperature_2` / `sensor.ewelink_snzb_02p_humidity_2` · scene entity IDs (`scene.campfire_good_night`, `scene.campfire_good_morning`, etc.) |
 
 Also update the HA IP (`192.168.1.4`) and long-lived token in `pages/music.yaml` boot fetch.
 
@@ -111,12 +111,67 @@ Sensor state format: `"HH:MM,condition,temp,precip_prob"` e.g. `"14:00,rainy,29,
 ```bash
 cd esp32p4-dashboard
 
-# OTA (device already on WiFi):
-esphome run dashboard.yaml
+# OTA (device already on WiFi) — suppress serial log output:
+esphome run dashboard.yaml --no-logs
 
 # First-time USB flash:
 esphome run dashboard.yaml --device /dev/ttyUSB0
 ```
+
+---
+
+## Development workflow
+
+Day-to-day cycle for updating entity IDs, config changes, reflashing, and pushing.
+
+### Update a sensor entity ID
+
+Open the relevant page YAML and change the `entity_id` value:
+
+```yaml
+# pages/home_ctrl.yaml — bedroom sensors
+- platform: homeassistant
+  id: indoor_bedroom_temp
+  entity_id: sensor.ewelink_snzb_02p_temperature_2   # ← change this
+
+- platform: homeassistant
+  id: indoor_bedroom_hum
+  entity_id: sensor.ewelink_snzb_02p_humidity_2       # ← and this
+```
+
+### Current sensor mapping
+
+| Room | Temp entity | Humidity entity |
+|------|-------------|-----------------|
+| Living Room | `sensor.ewelink_snzb_02p_temperature` | `sensor.ewelink_snzb_02p_humidity` |
+| Bedroom | `sensor.ewelink_snzb_02p_temperature_2` | `sensor.ewelink_snzb_02p_humidity_2` |
+
+### Flash via OTA
+
+```bash
+cd /Users/Ronny.O/espframe-build
+esphome run dashboard.yaml --no-logs
+```
+
+The device is at `192.168.1.39`. OTA takes ~13 seconds to upload.
+
+### Commit and push
+
+```bash
+git add pages/home_ctrl.yaml          # (or whichever file changed)
+git commit -m "feat: describe your change"
+git push origin main
+```
+
+If push fails with **"Invalid username or token"**, the stored PAT in the remote URL has expired. Update it:
+
+```bash
+git remote set-url origin https://NEW_PAT@github.com/lobuche67/esp32p4-dashboard.git
+git push origin main
+```
+
+Generate a new PAT at: **GitHub → Settings → Developer settings → Personal access tokens**
+Required permission: `repo` → Read and Write access to code.
 
 ---
 
