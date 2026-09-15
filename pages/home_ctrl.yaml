@@ -1,7 +1,7 @@
 # PAGE 2 — Home Control
 # Indoor sensors:
 #   Living Room: sensor.ewelink_snzb_02p_temperature / sensor.ewelink_snzb_02p_humidity
-#   Bedroom:     sensor.bedroom_temperature / sensor.bedroom_humidity  (update when sensor added)
+#   Bedroom:     sensor.ewelink_snzb_02p_temperature_2 / sensor.ewelink_snzb_02p_humidity_2
 # Scenes: scene.campfire_good_night / good_morning / movie_night / evening_work
 
 sensor:
@@ -30,7 +30,7 @@ sensor:
 
   - platform: homeassistant
     id: indoor_bedroom_temp
-    entity_id: sensor.bedroom_temperature
+    entity_id: sensor.ewelink_snzb_02p_temperature_2
     on_value:
       then:
         - lvgl.label.update:
@@ -41,7 +41,7 @@ sensor:
 
   - platform: homeassistant
     id: indoor_bedroom_hum
-    entity_id: sensor.bedroom_humidity
+    entity_id: sensor.ewelink_snzb_02p_humidity_2
     on_value:
       then:
         - lvgl.label.update:
